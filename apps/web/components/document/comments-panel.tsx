@@ -1,7 +1,9 @@
 "use client"
 
 import type { Collaborator, Comment } from "@collab/shared"
+import { commentSchema } from "@collab/shared"
 import { zodResolver } from "@hookform/resolvers/zod"
+import type { Editor } from "@tiptap/react"
 import { Check, MessageSquare, RotateCcw, Send } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
@@ -30,6 +32,9 @@ interface CommentsPanelProps {
   onCommentAdded: () => void
   collaborators: Collaborator[]
   activeEmails: string[]
+  editor: Editor | null
+  pendingCommentRange: { from: number; to: number } | null
+  onPendingRangeCleared: () => void
 }
 
 export function CommentsPanel({
@@ -40,7 +45,10 @@ export function CommentsPanel({
   canComment,
   selectedText,
   onCommentAdded,
-  collaborators
+  collaborators,
+  editor,
+  pendingCommentRange,
+  onPendingRangeCleared
 }: CommentsPanelProps) {
   return (
     <aside className="w-80 border-l flex flex-col overflow-hidden" data-comments-panel>
@@ -57,6 +65,9 @@ export function CommentsPanel({
           currentUser={currentUser}
           selectedText={selectedText}
           onCommentAdded={onCommentAdded}
+          editor={editor}
+          pendingCommentRange={pendingCommentRange}
+          onPendingRangeCleared={onPendingRangeCleared}
         />
       )}
 
@@ -76,6 +87,7 @@ export function CommentsPanel({
               canComment={canComment}
               collaborators={collaborators}
               onUpdated={onCommentAdded}
+              editor={editor}
             />
           ))
         )}
@@ -89,13 +101,19 @@ function AddCommentForm({
   token,
   currentUser,
   selectedText,
-  onCommentAdded
+  onCommentAdded,
+  editor,
+  pendingCommentRange,
+  onPendingRangeCleared
 }: {
   documentId: string
   token: string
   currentUser: Collaborator
   selectedText: string
   onCommentAdded: () => void
+  editor: Editor | null
+  pendingCommentRange: { from: number; to: number } | null
+  onPendingRangeCleared: () => void
 }) {
   const {
     register,
@@ -108,13 +126,25 @@ function AddCommentForm({
 
   const onSubmit = async (data: CommentFormData) => {
     try {
-      await apiPost(
+      const created = await apiPost(
         API_ROUTES.comments.create,
         { documentId, content: data.content, quotedText: selectedText },
-        undefined,
+        commentSchema,
         { headers: authHeaders(currentUser.email, token) }
       )
+
+      // If the user can edit, anchor the comment thread to the original
+      // selection range by setting our custom comment mark.
+      if (created && editor && pendingCommentRange && editor.isEditable) {
+        editor
+          .chain()
+          .setTextSelection(pendingCommentRange)
+          .setCommentMark({ commentId: created.id, color: currentUser.color })
+          .run()
+      }
+
       reset()
+      onPendingRangeCleared()
       onCommentAdded()
       toast.success("Comment added")
     } catch (err) {
@@ -147,7 +177,8 @@ function CommentThread({
   currentUser,
   canComment,
   collaborators,
-  onUpdated
+  onUpdated,
+  editor
 }: {
   comment: Comment
   documentId: string
@@ -156,6 +187,7 @@ function CommentThread({
   canComment: boolean
   collaborators: Collaborator[]
   onUpdated: () => void
+  editor: Editor | null
 }) {
   const [showReply, setShowReply] = useState(false)
   const authorColor = collaborators.find((c) => c.email === comment.authorEmail)?.color || "#999"
@@ -168,6 +200,13 @@ function CommentThread({
         undefined,
         { headers: authHeaders(currentUser.email, token) }
       )
+
+      // When resolving, remove the inline comment mark from the document.
+      // Reopening doesn't bring it back (mark is gone in Yjs) — acceptable for demo.
+      if (!comment.resolved && editor && editor.isEditable) {
+        editor.commands.removeCommentMarkById(comment.id)
+      }
+
       onUpdated()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update comment")

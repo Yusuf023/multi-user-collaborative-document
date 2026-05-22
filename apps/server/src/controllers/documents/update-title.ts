@@ -3,6 +3,7 @@ import type { Request, Response } from "express"
 import { db } from "../../db"
 import { documents } from "../../db/schema"
 import type { AuthenticatedRequest } from "../../middleware/authenticate"
+import { isDocumentFinalized } from "../../utils/document-status"
 
 export async function updateTitle(req: Request, res: Response) {
   const { role: requesterRole, documentId } = (req as AuthenticatedRequest).auth
@@ -10,6 +11,11 @@ export async function updateTitle(req: Request, res: Response) {
 
   if (requesterRole !== "owner" && requesterRole !== "editor") {
     res.status(403).json({ error: "You do not have permission to rename this document" })
+    return
+  }
+
+  if (await isDocumentFinalized(documentId)) {
+    res.status(409).json({ error: "Document is finalized and cannot be modified" })
     return
   }
 

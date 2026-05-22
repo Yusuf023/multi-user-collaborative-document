@@ -7,10 +7,16 @@ const mockDbQuery = {
 }
 const mockInsert = vi.fn()
 const mockUpdate = vi.fn()
+// isDocumentFinalized queries documents.findFirst; default to non-finalized so
+// existing tests run unchanged. Individual tests can override via mockResolvedValueOnce.
+const mockDocumentsFindFirst = vi.fn().mockResolvedValue({ finalized: false })
 
 vi.mock("../db", () => ({
   db: {
     query: {
+      documents: {
+        findFirst: (...args: unknown[]) => mockDocumentsFindFirst(...args)
+      },
       comments: {
         findFirst: (...args: unknown[]) => mockDbQuery.comments.findFirst(...args),
         findMany: (...args: unknown[]) => mockDbQuery.comments.findMany(...args)
@@ -25,6 +31,7 @@ vi.mock("../db", () => ({
 }))
 
 vi.mock("../db/schema", () => ({
+  documents: { id: "id", finalized: "finalized" },
   comments: { id: "id", documentId: "document_id" },
   commentReplies: { commentId: "comment_id" },
   collaborators: { documentId: "document_id", email: "email" }

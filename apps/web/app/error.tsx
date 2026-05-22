@@ -9,7 +9,7 @@ interface ErrorPageProps {
   reset: () => void
 }
 
-export default function DocumentError({ error, reset }: ErrorPageProps) {
+export default function GlobalError({ error, reset }: ErrorPageProps) {
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6 text-center">
@@ -21,7 +21,7 @@ export default function DocumentError({ error, reset }: ErrorPageProps) {
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold">Something went wrong</h1>
           <p className="text-sm text-muted-foreground">
-            {error.message || "An unexpected error occurred while loading this document."}
+            {error.message || "An unexpected error occurred. Please try again."}
           </p>
         </div>
         <div className="flex gap-2 justify-center">

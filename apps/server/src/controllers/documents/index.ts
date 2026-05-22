@@ -1,6 +1,8 @@
 export { createDocument } from "./create"
+export { finalizeDocument } from "./finalize"
 export { getDocument } from "./get"
 export { inviteUsers } from "./invite"
 export { joinDocument } from "./join"
+export { removeCollaborator } from "./remove-collaborator"
 export { updateRole } from "./update-role"
 export { updateTitle } from "./update-title"

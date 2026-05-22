@@ -2,6 +2,12 @@ import "dotenv/config"
 import { cleanEnv, num, port, str, url } from "envalid"
 
 export const env = cleanEnv(process.env, {
+  NODE_ENV: str({ choices: ["development", "test", "production"], default: "development" }),
+  LOG_LEVEL: str({
+    choices: ["fatal", "error", "warn", "info", "debug", "trace", "silent"],
+    default: "info",
+    desc: "Pino log level"
+  }),
   PORT: port({ default: 4000 }),
   DATABASE_URL: url(),
   REDIS_URL: url(),

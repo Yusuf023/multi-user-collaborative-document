@@ -21,7 +21,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <NextTopLoader color="var(--color-primary)" showSpinner={false} />
           <TooltipProvider>{children}</TooltipProvider>
-          <Toaster position="bottom-right" />
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              unstyled: false,
+              classNames: {
+                toast:
+                  "!bg-popover/80 dark:!bg-popover/60 !border !border-border !text-popover-foreground !backdrop-blur-md !shadow-md",
+                title: "!text-popover-foreground",
+                description: "!text-muted-foreground",
+                actionButton: "!bg-primary !text-primary-foreground",
+                cancelButton: "!bg-muted !text-muted-foreground",
+                closeButton: "!bg-popover !text-popover-foreground !border-border"
+              }
+            }}
+          />
         </ThemeProvider>
       </body>
     </html>

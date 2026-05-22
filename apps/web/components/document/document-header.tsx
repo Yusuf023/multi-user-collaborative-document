@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { ActiveUsers } from "./active-users"
 import { ConnectionStatus } from "./connection-status"
 import { DocumentTitle } from "./document-title"
+import { FinalizeButton } from "./finalize-button"
 import { InviteDialog } from "./invite-dialog"
 import { RoleManager } from "./role-manager"
 
@@ -17,6 +18,7 @@ interface DocumentHeaderProps {
   token: string
   provider: HocuspocusProvider | null
   onCollaboratorsUpdate: (collaborators: Collaborator[]) => void
+  onFinalizedChange: (finalized: boolean) => void
 }
 
 export function DocumentHeader({
@@ -26,9 +28,12 @@ export function DocumentHeader({
   activeEmails,
   token,
   provider,
-  onCollaboratorsUpdate
+  onCollaboratorsUpdate,
+  onFinalizedChange
 }: DocumentHeaderProps) {
-  const canEditTitle = currentUser.role === "owner" || currentUser.role === "editor"
+  const isPrivileged = currentUser.role === "owner" || currentUser.role === "editor"
+  // Title editing is blocked when the document is finalized
+  const canEditTitle = isPrivileged && !document.finalized
 
   return (
     <header className="flex items-center justify-between border-b px-4 py-3 gap-3">
@@ -41,7 +46,7 @@ export function DocumentHeader({
           token={token}
           canEdit={canEditTitle}
         />
-        <ConnectionStatus connected={connected} />
+        <ConnectionStatus connected={connected} finalized={document.finalized} />
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
@@ -59,12 +64,21 @@ export function DocumentHeader({
             onUpdated={onCollaboratorsUpdate}
           />
         )}
-        {(currentUser.role === "owner" || currentUser.role === "editor") && (
+        {isPrivileged && (
           <InviteDialog
             documentId={document.id}
             token={token}
             currentUser={currentUser}
             onInvited={onCollaboratorsUpdate}
+          />
+        )}
+        {isPrivileged && (
+          <FinalizeButton
+            documentId={document.id}
+            token={token}
+            currentUserEmail={currentUser.email}
+            finalized={document.finalized}
+            onFinalized={onFinalizedChange}
           />
         )}
         <ThemeToggle />

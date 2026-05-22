@@ -11,6 +11,8 @@ import { useActiveUsers } from "@/hooks/use-active-users"
 import { apiGet, authHeaders } from "@/lib/api-client"
 import { API_ROUTES } from "@/lib/api-routes"
 
+const COLLABORATORS_META_KEY = "collaboratorsVersion"
+
 interface DocumentPageClientProps {
   documentId: string
   email: string
@@ -44,14 +46,17 @@ export function DocumentPageClient({ documentId, email, token }: DocumentPageCli
     fetchDocument()
   }, [fetchDocument])
 
-  // Create the Hocuspocus provider once we have a valid user
+  // Create the Hocuspocus provider once we have a valid user.
+  // IMPORTANT: depend on primitives (email), not on the currentUser object —
+  // otherwise every re-render creates a fresh provider and edits never persist.
+  const currentUserEmail = currentUser?.email
   useEffect(() => {
-    if (!currentUser) return
+    if (!currentUserEmail) return
 
     const hocuspocusProvider = new HocuspocusProvider({
       url: `${env.NEXT_PUBLIC_WS_URL}/collaboration`,
       name: documentId,
-      token: `${currentUser.email}|${token}`,
+      token: `${currentUserEmail}|${token}`,
       onStatus({ status }) {
         setConnected(status === "connected")
       }
@@ -64,7 +69,54 @@ export function DocumentPageClient({ documentId, email, token }: DocumentPageCli
       setProvider(null)
       setConnected(false)
     }
-  }, [documentId, token, currentUser])
+  }, [documentId, token, currentUserEmail])
+
+  // Listen for collaborator-list changes broadcast from other clients via Yjs meta
+  useEffect(() => {
+    if (!provider) return
+    const meta = provider.document.getMap("meta")
+    let lastVersion = (meta.get(COLLABORATORS_META_KEY) as number | undefined) ?? 0
+
+    const observer = () => {
+      const version = (meta.get(COLLABORATORS_META_KEY) as number | undefined) ?? 0
+      if (version !== lastVersion) {
+        lastVersion = version
+        fetchDocument()
+      }
+    }
+
+    meta.observe(observer)
+    return () => meta.unobserve(observer)
+  }, [provider, fetchDocument])
+
+  const notifyCollaboratorsChanged = useCallback(() => {
+    if (!provider) return
+    const meta = provider.document.getMap("meta")
+    const current = (meta.get(COLLABORATORS_META_KEY) as number | undefined) ?? 0
+    meta.set(COLLABORATORS_META_KEY, current + 1)
+  }, [provider])
+
+  const handleCollaboratorsUpdate = useCallback(
+    (collaborators: Collaborator[]) => {
+      setDocument((prev) => (prev ? { ...prev, collaborators } : prev))
+      notifyCollaboratorsChanged()
+    },
+    [notifyCollaboratorsChanged]
+  )
+
+  const handleFinalizedChange = useCallback(
+    (finalized: boolean) => {
+      // Optimistic local update; we always refetch shortly via the version bump
+      // so the canonical state will be re-applied from the server (incl. finalizedBy/At).
+      setDocument((prev) => (prev ? { ...prev, finalized } : prev))
+      notifyCollaboratorsChanged()
+      // Trigger another refetch after a short delay so we pick up the
+      // server-side finalizedBy/finalizedAt audit fields and let the closed
+      // WS connections from the server-side closeConnections reconnect.
+      setTimeout(fetchDocument, 400)
+    },
+    [notifyCollaboratorsChanged, fetchDocument]
+  )
 
   if (loading) {
     return (
@@ -96,9 +148,8 @@ export function DocumentPageClient({ documentId, email, token }: DocumentPageCli
         activeEmails={activeEmails}
         token={token}
         provider={provider}
-        onCollaboratorsUpdate={(collaborators: Collaborator[]) =>
-          setDocument({ ...document, collaborators })
-        }
+        onCollaboratorsUpdate={handleCollaboratorsUpdate}
+        onFinalizedChange={handleFinalizedChange}
       />
       <DocumentEditor
         documentId={documentId}
@@ -108,6 +159,7 @@ export function DocumentPageClient({ documentId, email, token }: DocumentPageCli
         provider={provider}
         connected={connected}
         activeEmails={activeEmails}
+        finalized={document.finalized}
       />
     </div>
   )

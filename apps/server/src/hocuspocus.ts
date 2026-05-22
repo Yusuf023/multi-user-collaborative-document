@@ -4,8 +4,11 @@ import { eq } from "drizzle-orm"
 import { db } from "./db"
 import { documentSnapshots } from "./db/schema"
 import { env } from "./env"
+import { logger } from "./services/logger"
 import { getDocState, setDocState } from "./services/redis"
 import { getCollaborator, normalizeEmail, verifyDocumentAccess } from "./utils/auth"
+
+const log = logger.child({ component: "hocuspocus" })
 
 // Track pending flush timers and their latest state
 const pendingFlushes = new Map<string, ReturnType<typeof setTimeout>>()
@@ -34,8 +37,9 @@ function debouncedDbFlush(documentName: string, state: Uint8Array) {
     pendingStates.delete(documentName)
     try {
       await flushToDb(documentName, state)
+      log.debug({ documentName, bytes: state.length }, "debounced db flush")
     } catch (err) {
-      console.error(`Failed to flush document ${documentName} to DB:`, err)
+      log.error({ err, documentName }, "debounced db flush failed")
     }
   }, env.DB_FLUSH_INTERVAL_MS)
 
@@ -43,7 +47,16 @@ function debouncedDbFlush(documentName: string, state: Uint8Array) {
 }
 
 export const hocuspocus = new Hocuspocus({
+  async onConnect({ documentName }) {
+    log.info({ documentName }, "connect")
+  },
+
+  async onDisconnect({ documentName }) {
+    log.info({ documentName }, "disconnect")
+  },
+
   async onAuthenticate({ token, documentName, connectionConfig }) {
+    log.debug({ documentName }, "authenticate")
     // token format: "email|docToken" — pipe delimiter avoids issues with : in emails
     const separatorIndex = token.lastIndexOf("|")
 
@@ -68,7 +81,10 @@ export const hocuspocus = new Hocuspocus({
       throw new Error("Access denied")
     }
 
-    if (collaborator.role === "viewer" || collaborator.role === "reviewer") {
+    // Finalized documents are read-only for everyone, regardless of role
+    if (document.finalized) {
+      connectionConfig.readOnly = true
+    } else if (collaborator.role === "viewer" || collaborator.role === "reviewer") {
       connectionConfig.readOnly = true
     }
 
@@ -87,6 +103,7 @@ export const hocuspocus = new Hocuspocus({
         // Try Redis first
         const redisState = await getDocState(documentName)
         if (redisState) {
+          log.debug({ documentName, source: "redis", bytes: redisState.length }, "fetch hit")
           return new Uint8Array(redisState)
         }
 
@@ -97,20 +114,25 @@ export const hocuspocus = new Hocuspocus({
 
         if (snapshot) {
           const buffer = Buffer.from(snapshot.state, "base64")
+          log.debug({ documentName, source: "postgres", bytes: buffer.length }, "fetch hit")
           await setDocState(documentName, buffer)
           return new Uint8Array(buffer)
         }
 
+        log.debug({ documentName }, "fetch miss (new doc)")
         return null
       },
 
       async store({ documentName, state }) {
+        log.debug({ documentName, bytes: state.length }, "store")
         const buffer = Buffer.from(state)
 
-        // Always write to Redis immediately
-        await setDocState(documentName, buffer)
+        try {
+          await setDocState(documentName, buffer)
+        } catch (err) {
+          log.error({ err, documentName }, "redis store failed")
+        }
 
-        // Debounce the Postgres write
         debouncedDbFlush(documentName, state)
       }
     })
@@ -129,8 +151,9 @@ async function flushAllPending() {
     entries.map(async ([documentName, state]) => {
       try {
         await flushToDb(documentName, state)
+        log.info({ documentName, bytes: state.length }, "shutdown flush complete")
       } catch (err) {
-        console.error(`Shutdown flush failed for ${documentName}:`, err)
+        log.error({ err, documentName }, "shutdown flush failed")
       }
     })
   )

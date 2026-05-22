@@ -97,11 +97,17 @@ describe("documents routes", () => {
     it("creates document and adds owner collaborator", async () => {
       mockInsert.mockReturnValueOnce({
         values: vi.fn().mockReturnValue({
-          returning: vi
-            .fn()
-            .mockResolvedValue([
-              { id: "new-doc-id", token: "abc123", createdAt: new Date("2024-01-01") }
-            ])
+          returning: vi.fn().mockResolvedValue([
+            {
+              id: "new-doc-id",
+              token: "abc123",
+              title: "Untitled Document",
+              finalized: false,
+              finalizedBy: null,
+              finalizedAt: null,
+              createdAt: new Date("2024-01-01")
+            }
+          ])
         })
       })
       mockInsert.mockReturnValueOnce({
@@ -118,6 +124,10 @@ describe("documents routes", () => {
       expect(res.json).toHaveBeenCalledWith({
         id: "new-doc-id",
         token: "abc123",
+        title: "Untitled Document",
+        finalized: false,
+        finalizedBy: null,
+        finalizedAt: null,
         createdAt: "2024-01-01T00:00:00.000Z"
       })
     })
@@ -154,7 +164,15 @@ describe("documents routes", () => {
     })
 
     it("returns document details on success", async () => {
-      const doc = { id: "doc-uuid", token: "abc123", createdAt: new Date("2024-01-01") }
+      const doc = {
+        id: "doc-uuid",
+        token: "abc123",
+        title: "Untitled Document",
+        finalized: false,
+        finalizedBy: null,
+        finalizedAt: null,
+        createdAt: new Date("2024-01-01")
+      }
       mockDbQuery.documents.findFirst.mockResolvedValue(doc)
       mockDbQuery.collaborators.findFirst.mockResolvedValue({
         email: "user@test.com",
@@ -180,6 +198,10 @@ describe("documents routes", () => {
       expect(res.json).toHaveBeenCalledWith({
         id: "doc-uuid",
         token: "abc123",
+        title: "Untitled Document",
+        finalized: false,
+        finalizedBy: null,
+        finalizedAt: null,
         collaborators: [
           {
             email: "user@test.com",

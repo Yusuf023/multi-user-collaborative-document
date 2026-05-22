@@ -18,6 +18,7 @@ interface DocumentEditorProps {
   provider: HocuspocusProvider | null
   connected: boolean
   activeEmails: string[]
+  finalized: boolean
 }
 
 export function DocumentEditor({
@@ -27,10 +28,18 @@ export function DocumentEditor({
   collaborators,
   provider,
   connected,
-  activeEmails
+  activeEmails,
+  finalized
 }: DocumentEditorProps) {
   const [selectedText, setSelectedText] = useState("")
   const [editorInstance, setEditorInstance] = useState<Editor | null>(null)
+  // Captured when the user clicks the floating "add comment" button. Held at the
+  // editor level because the user types the comment content in the right-hand
+  // panel, by which time the editor selection may have moved.
+  const [pendingCommentRange, setPendingCommentRange] = useState<{
+    from: number
+    to: number
+  } | null>(null)
 
   const { comments, notifyCommentsChanged } = useCommentsSync(
     provider,
@@ -39,8 +48,9 @@ export function DocumentEditor({
     token
   )
 
-  const canEdit = currentUser.role === "owner" || currentUser.role === "editor"
-  const canComment = currentUser.role !== "viewer"
+  // Finalized documents are fully locked — no edits, no comments, regardless of role
+  const canEdit = !finalized && (currentUser.role === "owner" || currentUser.role === "editor")
+  const canComment = !finalized && currentUser.role !== "viewer"
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -58,7 +68,10 @@ export function DocumentEditor({
             />
           )}
           {canComment && selectedText && editorInstance && (
-            <FloatingCommentButton editor={editorInstance} />
+            <FloatingCommentButton
+              editor={editorInstance}
+              onRequestComment={setPendingCommentRange}
+            />
           )}
         </div>
       </div>
@@ -73,6 +86,9 @@ export function DocumentEditor({
         onCommentAdded={notifyCommentsChanged}
         collaborators={collaborators}
         activeEmails={activeEmails}
+        editor={editorInstance}
+        pendingCommentRange={pendingCommentRange}
+        onPendingRangeCleared={() => setPendingCommentRange(null)}
       />
     </div>
   )

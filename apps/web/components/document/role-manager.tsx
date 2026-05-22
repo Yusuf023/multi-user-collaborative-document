@@ -1,8 +1,8 @@
 "use client"
 
-import type { Collaborator, Role } from "@collab/shared"
-import { ROLES } from "@collab/shared"
-import { Settings2 } from "lucide-react"
+import type { Collaborator, InvitableRole } from "@collab/shared"
+import { INVITABLE_ROLES } from "@collab/shared"
+import { Settings2, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select"
-import { apiPatch, authHeaders } from "@/lib/api-client"
+import { apiDelete, apiPatch, authHeaders } from "@/lib/api-client"
 import { API_ROUTES } from "@/lib/api-routes"
 import { getInitials } from "@/lib/utils"
 
@@ -44,7 +44,7 @@ export function RoleManager({
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
 
-  const handleRoleChange = async (email: string, newRole: Role) => {
+  const handleRoleChange = async (email: string, newRole: InvitableRole) => {
     setLoading(email)
     try {
       await apiPatch(
@@ -63,29 +63,50 @@ export function RoleManager({
     }
   }
 
-  const otherCollaborators = collaborators.filter((c) => c.email !== currentUser.email)
+  const handleRemove = async (email: string) => {
+    setLoading(email)
+    try {
+      await apiDelete(
+        API_ROUTES.documents.removeCollaborator,
+        { documentId, email },
+        { headers: authHeaders(currentUser.email, token) }
+      )
+      const updated = collaborators.filter((c) => c.email !== email)
+      onUpdated(updated)
+      toast.success(`Removed ${email}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove collaborator")
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  // Owner can manage everyone else; owners themselves are never editable/removable here.
+  const manageable = collaborators.filter(
+    (c) => c.email !== currentUser.email && c.role !== "owner"
+  )
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button size="sm" variant="ghost" />}>
         <Settings2 className="h-3.5 w-3.5" />
       </DialogTrigger>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Manage roles</DialogTitle>
+          <DialogTitle>Manage collaborators</DialogTitle>
           <DialogDescription>
-            Change collaborator roles. Only the owner can do this.
+            Change roles or remove people from this document. Only the owner can do this.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 max-h-[300px] overflow-y-auto">
-          {otherCollaborators.length === 0 ? (
+        <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+          {manageable.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
               No other collaborators yet.
             </p>
           ) : (
-            otherCollaborators.map((collab) => (
-              <div key={collab.email} className="flex items-center gap-3">
-                <Avatar className="h-6 w-6 shrink-0">
+            manageable.map((collab) => (
+              <div key={collab.email} className="flex items-center gap-2">
+                <Avatar className="h-7 w-7 shrink-0">
                   <AvatarFallback
                     className="text-[10px]"
                     style={{ backgroundColor: collab.color, color: "#fff" }}
@@ -93,23 +114,36 @@ export function RoleManager({
                     {getInitials(collab.email)}
                   </AvatarFallback>
                 </Avatar>
-                <span className="flex-1 text-sm truncate">{collab.email}</span>
+                <span className="flex-1 text-sm truncate" title={collab.email}>
+                  {collab.email}
+                </span>
                 <Select
                   value={collab.role}
-                  onValueChange={(val) => handleRoleChange(collab.email, val as Role)}
+                  onValueChange={(val) => handleRoleChange(collab.email, val as InvitableRole)}
                   disabled={loading === collab.email}
                 >
                   <SelectTrigger className="w-28 h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ROLES.filter((r) => r !== "owner").map((role) => (
+                    {INVITABLE_ROLES.map((role) => (
                       <SelectItem key={role} value={role} className="text-xs capitalize">
                         {role}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0 text-destructive hover:text-destructive"
+                  onClick={() => handleRemove(collab.email)}
+                  disabled={loading === collab.email}
+                  aria-label={`Remove ${collab.email}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
               </div>
             ))
           )}

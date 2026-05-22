@@ -47,6 +47,16 @@ export const updateTitleSchema = z.object({
   title: z.string().trim().min(1, "Title cannot be empty").max(TITLE_MAX_LENGTH)
 })
 
+export const removeCollaboratorSchema = z.object({
+  documentId: documentIdSchema,
+  email: emailSchema
+})
+
+export const finalizeDocumentSchema = z.object({
+  documentId: documentIdSchema,
+  finalized: z.boolean()
+})
+
 export const addCommentSchema = z.object({
   documentId: documentIdSchema,
   content: z.string().min(1),
@@ -83,6 +93,9 @@ export const documentDetailsSchema = z.object({
   id: z.uuid(),
   token: z.string(),
   title: z.string(),
+  finalized: z.boolean(),
+  finalizedBy: z.string().nullable(),
+  finalizedAt: z.string().nullable(),
   collaborators: z.array(collaboratorSchema),
   createdAt: z.string()
 })
@@ -116,6 +129,8 @@ export type JoinDocumentRequest = z.infer<typeof joinDocumentSchema>
 export type InviteUsersRequest = z.infer<typeof inviteUsersSchema>
 export type UpdateRoleRequest = z.infer<typeof updateRoleSchema>
 export type UpdateTitleRequest = z.infer<typeof updateTitleSchema>
+export type RemoveCollaboratorRequest = z.infer<typeof removeCollaboratorSchema>
+export type FinalizeDocumentRequest = z.infer<typeof finalizeDocumentSchema>
 export type AddCommentRequest = z.infer<typeof addCommentSchema>
 export type ReplyCommentRequest = z.infer<typeof replyCommentSchema>
 export type ResolveCommentRequest = z.infer<typeof resolveCommentSchema>

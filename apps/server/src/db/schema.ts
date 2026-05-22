@@ -4,6 +4,9 @@ export const documents = pgTable("documents", {
   id: uuid("id").primaryKey().defaultRandom(),
   token: text("token").notNull(),
   title: text("title").default("Untitled Document").notNull(),
+  finalized: boolean("finalized").default(false).notNull(),
+  finalizedBy: text("finalized_by"),
+  finalizedAt: timestamp("finalized_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 })
 

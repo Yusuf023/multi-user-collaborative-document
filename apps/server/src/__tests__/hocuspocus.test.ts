@@ -20,9 +20,27 @@ vi.mock("../services/redis", () => ({
   setDocState: vi.fn()
 }))
 
+const mockLoggerError = vi.fn()
+vi.mock("../services/logger", () => ({
+  logger: {
+    child: () => ({
+      info: vi.fn(),
+      debug: vi.fn(),
+      warn: vi.fn(),
+      error: mockLoggerError
+    }),
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: mockLoggerError
+  }
+}))
+
 vi.mock("../env", () => ({
   env: {
-    DB_FLUSH_INTERVAL_MS: 100
+    DB_FLUSH_INTERVAL_MS: 100,
+    NODE_ENV: "test",
+    LOG_LEVEL: "silent"
   }
 }))
 
@@ -277,7 +295,7 @@ describe("hocuspocus", () => {
 
       it("handles DB flush error gracefully", async () => {
         vi.useFakeTimers()
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+        mockLoggerError.mockClear()
 
         const { db } = await import("../db")
         vi.mocked(db.insert).mockReturnValue({
@@ -291,12 +309,11 @@ describe("hocuspocus", () => {
 
         await vi.advanceTimersByTimeAsync(200)
 
-        expect(consoleSpy).toHaveBeenCalledWith(
-          expect.stringContaining("Failed to flush document error-doc"),
-          expect.any(Error)
+        expect(mockLoggerError).toHaveBeenCalledWith(
+          expect.objectContaining({ documentName: "error-doc", err: expect.any(Error) }),
+          expect.stringContaining("flush failed")
         )
 
-        consoleSpy.mockRestore()
         vi.useRealTimers()
       })
     })

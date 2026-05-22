@@ -2,12 +2,34 @@ import cors from "cors"
 import express from "express"
 import rateLimit from "express-rate-limit"
 import expressWebsockets from "express-ws"
+import { pinoHttp } from "pino-http"
 import { env } from "./env"
 import { hocuspocus } from "./hocuspocus"
 import { commentsRouter } from "./routes/comments"
 import { documentsRouter } from "./routes/documents"
+import { logger } from "./services/logger"
 
 const { app } = expressWebsockets(express())
+
+app.use(
+  pinoHttp({
+    logger,
+    // Skip OPTIONS pre-flights and only emit at info on success — the message
+    // already has method/URL/status so we don't need req/res serializers.
+    customLogLevel: (req, res, err) => {
+      if (err || res.statusCode >= 500) return "error"
+      if (res.statusCode >= 400) return "warn"
+      if (req.method === "OPTIONS") return "debug"
+      return "info"
+    },
+    customSuccessMessage: (req, res, responseTime) =>
+      `${req.method} ${req.url} ${res.statusCode} (${responseTime}ms)`,
+    customErrorMessage: (req, res, err) =>
+      `${req.method} ${req.url} ${res.statusCode}: ${err.message}`,
+    // Don't include req/res objects in the log — message has everything we need
+    serializers: { req: () => undefined, res: () => undefined, responseTime: () => undefined }
+  })
+)
 
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }))
 app.use(express.json())
@@ -28,9 +50,25 @@ app.post("/api/documents/join", unauthenticatedLimiter)
 app.use("/api/documents", documentsRouter)
 app.use("/api/comments", commentsRouter)
 
-// WebSocket route for Hocuspocus
+// WebSocket route for Hocuspocus.
+// Hocuspocus v4 returns a ClientConnection and expects the integrator to wire
+// the websocket's message/close events through to it.
 app.ws("/collaboration", (websocket, request) => {
-  hocuspocus.handleConnection(websocket, request as unknown as Request)
+  logger.info({ remoteAddress: request.socket.remoteAddress }, "ws /collaboration connection")
+
+  const clientConnection = hocuspocus.handleConnection(websocket, request as unknown as Request)
+
+  websocket.on("message", (data) => {
+    clientConnection.handleMessage(data as Buffer)
+  })
+
+  websocket.on("close", (code, reason) => {
+    clientConnection.handleClose({ code, reason: reason.toString() })
+  })
+
+  websocket.on("error", (err) => {
+    logger.error({ err }, "ws /collaboration error")
+  })
 })
 
 // Health check
@@ -39,5 +77,5 @@ app.get("/health", (_req, res) => {
 })
 
 app.listen(env.PORT, () => {
-  console.log(`Server running on port ${env.PORT}`)
+  logger.info(`Server running on port ${env.PORT}`)
 })

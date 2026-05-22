@@ -18,7 +18,7 @@ export default function HomePage() {
       </div>
       <div className="w-full max-w-md space-y-6 text-center">
         <div className="flex justify-center">
-          <GradientIcon color="var(--color-foreground)" size="xl">
+          <GradientIcon color="#3b82f6" size="xl">
             <Image src="/logo.svg" alt="Logo" width={36} height={36} className="dark:invert" />
           </GradientIcon>
         </div>

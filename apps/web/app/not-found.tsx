@@ -3,7 +3,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { GradientIcon } from "@/components/ui/gradient-icon"
 
-export default function DocumentNotFound() {
+export default function GlobalNotFound() {
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6 text-center">
@@ -13,9 +13,9 @@ export default function DocumentNotFound() {
           </GradientIcon>
         </div>
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold">Document not found</h1>
+          <h1 className="text-2xl font-semibold">Page not found</h1>
           <p className="text-sm text-muted-foreground">
-            The document you&rsquo;re looking for doesn&rsquo;t exist or the link is invalid.
+            The page you&rsquo;re looking for doesn&rsquo;t exist.
           </p>
         </div>
         <Link href="/">

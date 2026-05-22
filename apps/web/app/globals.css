@@ -102,18 +102,57 @@
   }
 }
 
-/* Collaboration cursor styles */
-.collaboration-cursor__caret {
-  @apply relative border-l-2 border-r-0 -ml-px -mr-px pointer-events-none;
+/* Collaboration caret styles — Tiptap 3 renamed prefix from "collaboration-cursor" to "collaboration-carets" */
+.tiptap .collaboration-carets__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 1px solid;
+  border-right: 1px solid;
   word-break: normal;
+  pointer-events: none;
 }
 
-.collaboration-cursor__label {
-  @apply absolute top-[-1.4em] -left-px text-xs text-white px-1.5 py-0.5 rounded-t-lg rounded-br-lg whitespace-nowrap select-none;
+/* Comment mark — anchors a comment thread to a range of text. The underline
+   color is set inline by the mark extension (text-decoration-color: <user color>)
+   so each commenter's underline is visually distinct. */
+.tiptap .comment-mark {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.tiptap .comment-mark:hover {
+  background-color: color-mix(in oklch, currentColor 8%, transparent);
+}
+
+/* Remote selection highlighting — Tiptap/y-tiptap applies background-color inline
+   per user (40% opacity via the default builder). We add rounded corners and a
+   blend mode so the highlight reads well over bold/italic text. */
+.tiptap .ProseMirror-yjs-selection {
+  border-radius: 2px;
+  mix-blend-mode: multiply;
+}
+
+.dark .tiptap .ProseMirror-yjs-selection {
+  mix-blend-mode: screen;
+}
+
+.tiptap .collaboration-carets__label {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px 3px 3px 0;
   font-size: 12px;
-  font-style: normal;
   font-weight: 600;
   line-height: normal;
+  color: #fff;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
 }
 
 @theme inline {

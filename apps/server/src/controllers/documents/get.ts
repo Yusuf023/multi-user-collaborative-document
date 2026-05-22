@@ -24,6 +24,9 @@ export async function getDocument(req: Request, res: Response) {
     id: document.id,
     token: document.token,
     title: document.title,
+    finalized: document.finalized,
+    finalizedBy: document.finalizedBy,
+    finalizedAt: document.finalizedAt?.toISOString() ?? null,
     collaborators: allCollaborators.map((c) => ({
       email: c.email,
       role: c.role,

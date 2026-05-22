@@ -9,7 +9,9 @@ export const API_ROUTES = {
     get: (id: string) => `${DOCUMENTS_BASE_URL}/${id}`,
     invite: `${DOCUMENTS_BASE_URL}/invite`,
     updateRole: `${DOCUMENTS_BASE_URL}/role`,
-    updateTitle: `${DOCUMENTS_BASE_URL}/title`
+    updateTitle: `${DOCUMENTS_BASE_URL}/title`,
+    removeCollaborator: `${DOCUMENTS_BASE_URL}/collaborator`,
+    finalize: `${DOCUMENTS_BASE_URL}/finalize`
   },
   comments: {
     list: (documentId: string) => `${COMMENTS_BASE_URL}/${documentId}`,

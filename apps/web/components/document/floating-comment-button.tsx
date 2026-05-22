@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button"
 
 interface FloatingCommentButtonProps {
   editor: Editor
+  onRequestComment: (range: { from: number; to: number }) => void
 }
 
-export function FloatingCommentButton({ editor }: FloatingCommentButtonProps) {
+export function FloatingCommentButton({ editor, onRequestComment }: FloatingCommentButtonProps) {
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
 
   useEffect(() => {
@@ -50,6 +51,11 @@ export function FloatingCommentButton({ editor }: FloatingCommentButtonProps) {
       aria-label="Add comment on selected text"
       title="Add comment"
       onClick={() => {
+        // Capture current selection range BEFORE the comments-panel input takes focus
+        const { from, to } = editor.state.selection
+        if (from === to) return
+        onRequestComment({ from, to })
+
         const panel = document.querySelector("[data-comments-panel]")
         const input = panel?.querySelector("input")
         input?.focus()

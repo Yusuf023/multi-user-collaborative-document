@@ -13,6 +13,9 @@ export async function createDocument(req: Request, res: Response) {
     id: documents.id,
     token: documents.token,
     title: documents.title,
+    finalized: documents.finalized,
+    finalizedBy: documents.finalizedBy,
+    finalizedAt: documents.finalizedAt,
     createdAt: documents.createdAt
   })
 
@@ -27,6 +30,9 @@ export async function createDocument(req: Request, res: Response) {
     id: document.id,
     token: document.token,
     title: document.title,
+    finalized: document.finalized,
+    finalizedBy: document.finalizedBy,
+    finalizedAt: document.finalizedAt?.toISOString() ?? null,
     createdAt: document.createdAt.toISOString()
   })
 }

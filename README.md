@@ -14,9 +14,10 @@ A real-time multi-user collaborative document editor built as a demo with produc
 ### Frontend (`apps/web`)
 
 - **Next.js 16** with Turbopack
-- **Tiptap v3** — rich text editor
+- **Tiptap v3** — rich text editor (with a custom `comment-mark` extension)
 - **Yjs** + **@hocuspocus/provider** — real-time collaboration (CRDT)
 - **Tailwind CSS v4** + **shadcn/ui** — styling and components
+- **next-themes** — light/dark theme switching with View Transitions API animation
 - **React Hook Form** + **Zod v4** — form management and validation
 - **Axios** — type-safe API client with Zod response validation
 - **nextjs-toploader** — page loading progress bar
@@ -29,6 +30,7 @@ A real-time multi-user collaborative document editor built as a demo with produc
 - **Drizzle ORM** + **PostgreSQL** — database
 - **Redis** — primary store for real-time document state with periodic DB flushes
 - **Resend** — transactional invite emails
+- **Pino** + `pino-http` — structured logger with HTTP request/response logging (pretty-printed in dev via `pino-pretty`)
 - **envalid** — type-safe environment variables
 - **express-ws** — WebSocket support for Express
 
@@ -49,22 +51,71 @@ A real-time multi-user collaborative document editor built as a demo with produc
 
 ### Role-Based Access Control (RBAC)
 
-| Permission            | Owner | Editor | Reviewer | Viewer |
-| --------------------- | ----- | ------ | -------- | ------ |
-| Edit document         | Yes   | Yes    | No       | No     |
-| Invite users          | Yes   | Yes    | No       | No     |
-| Change user roles     | Yes   | No     | No       | No     |
-| Add/reply comments    | Yes   | Yes    | Yes      | No     |
-| Resolve comments      | Yes   | Yes    | Yes      | No     |
-| View document         | Yes   | Yes    | Yes      | Yes    |
-| See collaborators     | Yes   | Yes    | Yes      | Yes    |
+The four roles — owner, editor, reviewer, viewer — gate every action in the app. Both the REST API (per-route checks) and the Yjs WebSocket (`readOnly` connection flag) enforce these permissions.
+
+| Action                          | Owner | Editor | Reviewer | Viewer |
+| ------------------------------- | :---: | :----: | :------: | :----: |
+| View document                   |  ✅   |   ✅   |    ✅    |   ✅   |
+| See collaborators / presence    |  ✅   |   ✅   |    ✅    |   ✅   |
+| Edit document body              |  ✅   |   ✅   |    ❌    |   ❌   |
+| Edit document title             |  ✅   |   ✅   |    ❌    |   ❌   |
+| Add / reply to comments         |  ✅   |   ✅   |    ✅    |   ❌   |
+| Resolve / reopen comments       |  ✅   |   ✅   |    ✅    |   ❌   |
+| Anchor comment marks in editor* |  ✅   |   ✅   |    ❌    |   ❌   |
+| Invite users                    |  ✅   |   ✅   |    ❌    |   ❌   |
+| Change a collaborator's role    |  ✅   |   ❌   |    ❌    |   ❌   |
+| Remove a collaborator           |  ✅   |   ❌   |    ❌    |   ❌   |
+| Finalise / reopen document      |  ✅   |   ✅   |    ❌    |   ❌   |
+
+\* Reviewers can post comments via REST but their WebSocket is read-only, so the inline underline mark only gets applied when an editor/owner posts a comment.
+
+Additional rules baked into the API:
+
+- An owner cannot demote themselves, remove themselves, or change their own role
+- The sole remaining owner cannot be demoted (would leave the doc without an owner)
+- Owners cannot be removed by anyone (they must demote first or be demoted by another owner)
+- Owners can only be assigned at document-creation time — there is no API path to promote a collaborator to owner
+
+### Finalising a document
+
+Owners and editors can **finalise** a document when changes are complete. While finalised:
+
+- The document becomes read-only over the WebSocket for **everyone**, including the owner
+- Title edits, comment add/reply/resolve, and document-body edits all return `409 Conflict` from the API
+- The connection status indicator in the header switches to **"Finalised"** (blue dot)
+- All open WebSocket connections are force-reconnected so the read-only flag takes effect immediately
+
+Finalise is reversible — any owner or editor can reopen the document at any time.
+
+### Document Title
+
+- Editable title in the document header (hover the title to reveal the pencil icon)
+- Click pencil to switch to an inline input; Enter saves, Esc cancels
+- New title broadcasts via Yjs `meta.title` — all connected clients see the change instantly
+- Persisted to Postgres so cold loads see the latest title
 
 ### Comments
 
 - Select text and add comments (creates a thread linked to the quoted text)
 - Reply to existing comment threads
 - Resolve and reopen comments
-- Comments are persisted to the database and synced in real-time via Yjs (no polling)
+- **Inline comment marks**: when an owner/editor posts a comment, the selected text is underlined in the commenter's collaborator color via a custom Tiptap mark that syncs through Yjs and persists with the document state
+- Resolving a comment removes the inline mark
+- Comments are persisted to Postgres and synced in real-time via a Yjs version counter (no polling)
+
+### Theming
+
+- Built-in light and dark themes (default: dark) powered by `next-themes`
+- Theme toggle on the homepage and document header
+- Smooth view-transition animation between themes (slides the new theme down from the top, gracefully falls back if `View Transitions API` or `prefers-reduced-motion` aren't available)
+- All overlays (tooltips, dialogs, popovers, hover cards, toasts) use a glass-morphism style (`backdrop-blur` + translucent popover background) that adapts to the active theme
+
+### Collaborator Management
+
+- **Role manager** (owner-only): change a collaborator's role between editor, reviewer, and viewer via a dropdown
+- **Remove collaborator** (owner-only): trash icon next to each collaborator in the manage dialog
+- Real-time propagation: invite, role change, and removal all bump a Yjs `meta.collaboratorsVersion` counter; every connected client immediately refetches its collaborator list and updates the UI
+- Demotion is reactive — if you're demoted from editor to viewer mid-session, the editor flips to read-only and the comment composer disappears without a refresh
 
 ### User Presence
 
@@ -96,21 +147,28 @@ A real-time multi-user collaborative document editor built as a demo with produc
 │   ├── web/                    Next.js frontend
 │   │   ├── app/
 │   │   │   ├── page.tsx            Homepage (create/join)
-│   │   │   └── [documentId]/       Document editor page
+│   │   │   ├── error.tsx           Global error boundary
+│   │   │   ├── not-found.tsx       Global 404
+│   │   │   └── [documentId]/       Document editor page + per-doc error/404
 │   │   ├── components/
 │   │   │   ├── ui/                 shadcn components (CLI-managed)
-│   │   │   ├── home/              Homepage forms
-│   │   │   └── document/          Editor, toolbar, comments, header
-│   │   ├── hooks/                 Custom hooks (useCommentsSync, useActiveUsers)
-│   │   ├── lib/                   API client, routes, utils
-│   │   └── env.ts                 Type-safe env (t3-env)
+│   │   │   ├── home/               Homepage forms
+│   │   │   ├── document/           Editor, toolbar, comments, header,
+│   │   │   │   ├── extensions/     Custom Tiptap extensions (comment-mark)
+│   │   │   │   └── ...
+│   │   │   ├── theme-provider.tsx  next-themes wrapper
+│   │   │   └── theme-toggle.tsx    View-transition theme switcher
+│   │   ├── hooks/                  Custom hooks (useCommentsSync, useActiveUsers)
+│   │   ├── lib/                    API client, routes, utils
+│   │   └── env.ts                  Type-safe env (t3-env)
 │   └── server/                 Express + Hocuspocus backend
 │       ├── src/
 │       │   ├── controllers/
-│       │   │   ├── documents/      create, join, get, invite, update-role
+│       │   │   ├── documents/      create, join, get, invite, update-role,
+│       │   │   │                   update-title, remove-collaborator, finalize
 │       │   │   └── comments/       list, create, reply, resolve
-│       │   ├── services/           External integrations (Redis, Resend)
-│       │   ├── utils/              Shared helpers (auth, email normalization)
+│       │   ├── services/           External integrations (Redis, Resend, Pino logger)
+│       │   ├── utils/              Shared helpers (auth, email norm, document status)
 │       │   ├── middleware/         authenticate, validate
 │       │   ├── routes/             Thin route wiring (middleware → controller)
 │       │   ├── db/                 Drizzle schema and client
@@ -174,18 +232,20 @@ This starts both the frontend (port 3000) and backend (port 4000) concurrently.
 
 #### Backend (`apps/server/.env`)
 
-| Variable                       | Description                            | Default                    |
-| ------------------------------ | -------------------------------------- | -------------------------- |
-| `PORT`                         | Server port                            | `4000`                     |
-| `DATABASE_URL`                 | PostgreSQL connection string           | —                          |
-| `REDIS_URL`                    | Redis connection string                | —                          |
-| `RESEND_API_KEY`               | Resend API key for sending emails      | —                          |
-| `RESEND_FROM_EMAIL`            | Sender email address                   | `noreply@example.com`      |
-| `FRONTEND_URL`                 | Frontend URL (for email links)         | `http://localhost:3000`    |
-| `CORS_ORIGIN`                  | Allowed CORS origin                    | `http://localhost:3000`    |
-| `DB_FLUSH_INTERVAL_MS`         | Debounce interval for Yjs→Postgres     | `3000`                     |
-| `RATE_LIMIT_WINDOW_MS`         | Rate limit window (ms)                 | `60000`                    |
-| `RATE_LIMIT_MAX_REQUESTS`      | Max requests per window                | `10`                       |
+| Variable                       | Description                                            | Default                    |
+| ------------------------------ | ------------------------------------------------------ | -------------------------- |
+| `NODE_ENV`                     | `development` / `test` / `production`                  | `development`              |
+| `LOG_LEVEL`                    | Pino log level (`fatal`/`error`/`warn`/`info`/`debug`) | `info`                     |
+| `PORT`                         | Server port                                            | `4000`                     |
+| `DATABASE_URL`                 | PostgreSQL connection string                           | —                          |
+| `REDIS_URL`                    | Redis connection string                                | —                          |
+| `RESEND_API_KEY`               | Resend API key for sending emails                      | —                          |
+| `RESEND_FROM_EMAIL`            | Sender email address                                   | `noreply@example.com`      |
+| `FRONTEND_URL`                 | Frontend URL (for email links)                         | `http://localhost:3000`    |
+| `CORS_ORIGIN`                  | Allowed CORS origin                                    | `http://localhost:3000`    |
+| `DB_FLUSH_INTERVAL_MS`         | Debounce interval for Yjs→Postgres                     | `3000`                     |
+| `RATE_LIMIT_WINDOW_MS`         | Rate limit window (ms)                                 | `60000`                    |
+| `RATE_LIMIT_MAX_REQUESTS`      | Max requests per window                                | `10`                       |
 
 #### Frontend (`apps/web/.env`)
 
@@ -257,6 +317,10 @@ flowchart TB
 - **Per-document token** — single shared token per document, not per-user
 - **Persistent user colors** — assigned on invite, stored in DB, never changes for that document
 - **Comments in DB, synced via Yjs** — stored in Postgres, fetched via REST. Real-time sync uses a version counter in a Yjs shared map (`meta.commentsVersion`); when any client mutates comments, it increments the counter and all connected clients instantly refetch. No polling needed.
+- **Collaborator changes propagate via the same mechanism** — invite, role change, and removal all bump `meta.collaboratorsVersion` so every connected client refetches and updates the UI without polling
+- **Finalise is enforced at both layers** — REST mutation routes (`title`, comments) return `409 Conflict` when the doc is finalised, and Hocuspocus's `onAuthenticate` sets `readOnly: true` on the WS for all roles. The finalise endpoint also force-closes existing connections so they reconnect under the new flag.
+- **Inline comment marks via custom Tiptap mark** — comments get a `comment-mark` inline mark anchored to the selection range. Because marks live inside the Yjs doc, they replicate to every client automatically, survive concurrent edits via CRDT, and persist with the document snapshot in Redis/Postgres.
+- **Hocuspocus v4 WS wiring** — `handleConnection` returns a `ClientConnection` that the integrator must forward `message`/`close` events into (breaking change from v3). The Express WS handler explicitly bridges those events.
 - **REST auth via headers** — all protected routes require `x-auth-email` + `x-auth-token` headers; middleware validates document access and attaches identity
 
 ## Security Model (Demo)

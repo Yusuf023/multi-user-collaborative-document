@@ -6,11 +6,11 @@ import Collaboration from "@tiptap/extension-collaboration"
 import CollaborationCaret from "@tiptap/extension-collaboration-caret"
 import Highlight from "@tiptap/extension-highlight"
 import Placeholder from "@tiptap/extension-placeholder"
-import Underline from "@tiptap/extension-underline"
 import type { Editor } from "@tiptap/react"
 import { EditorContent, useEditor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import { useEffect } from "react"
+import { CommentMark } from "./extensions/comment-mark"
 
 interface TiptapEditorProps {
   provider: HocuspocusProvider
@@ -30,12 +30,13 @@ export function TiptapEditor({
   connected
 }: TiptapEditorProps) {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         undoRedo: false
       }),
-      Underline,
       Highlight.configure({ multicolor: true }),
+      CommentMark,
       Placeholder.configure({
         placeholder: "Start typing..."
       }),
@@ -68,6 +69,14 @@ export function TiptapEditor({
       onEditorReady(editor)
     }
   }, [editor, onEditorReady])
+
+  // React to role changes (e.g., owner demoted to viewer) — useEditor only reads
+  // `editable` on init, so we need to push subsequent changes via setEditable.
+  useEffect(() => {
+    if (editor && editor.isEditable !== canEdit) {
+      editor.setEditable(canEdit)
+    }
+  }, [editor, canEdit])
 
   if (!connected) {
     return (

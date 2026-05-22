@@ -81,3 +81,11 @@ export async function apiPatch<TReq, TRes>(
   }
   return parsed.data
 }
+
+export async function apiDelete<TReq>(
+  url: string,
+  data: TReq,
+  options?: AxiosRequestConfig
+): Promise<void> {
+  await api.delete(url, { ...options, data })
+}
