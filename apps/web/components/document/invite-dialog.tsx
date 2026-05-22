@@ -56,6 +56,11 @@ interface InviteDialogProps {
   onInvited: (collaborators: Collaborator[]) => void
 }
 
+const emptyInvites = (): InviteFormData => ({
+  invites: [{ email: "", role: "editor" }],
+  sendEmail: true
+})
+
 export function InviteDialog({ documentId, token, currentUser, onInvited }: InviteDialogProps) {
   const [open, setOpen] = useState(false)
 
@@ -69,14 +74,17 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
     formState: { errors, isSubmitting }
   } = useForm<InviteFormData>({
     resolver: zodResolver(inviteFormSchema),
-    defaultValues: {
-      invites: [{ email: "", role: "editor" }],
-      sendEmail: true
-    }
+    defaultValues: emptyInvites()
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: "invites" })
   const sendEmail = watch("sendEmail")
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next)
+    // Reset form whenever dialog closes so the next open is fresh
+    if (!next) reset(emptyInvites())
+  }
 
   const onSubmit = async (data: InviteFormData) => {
     try {
@@ -89,7 +97,7 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
       if (result) {
         onInvited(result.collaborators as Collaborator[])
         toast.success("Invitations sent successfully")
-        reset()
+        reset(emptyInvites())
         setOpen(false)
       }
     } catch (err) {
@@ -98,7 +106,7 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={<Button size="sm" variant="outline" />}>
         <Share2 className="mr-1.5 h-3.5 w-3.5" />
         Share
@@ -109,24 +117,40 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
           <DialogDescription>Add people to collaborate on this document.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-3 max-h-[300px] overflow-y-auto">
+          <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
             {fields.map((field, index) => (
-              <div key={field.id} className="flex items-start gap-2">
-                <div className="flex-1 space-y-1">
-                  <Input placeholder="email@example.com" {...register(`invites.${index}.email`)} />
-                  {errors.invites?.[index]?.email && (
-                    <p className="text-xs text-destructive">
-                      {errors.invites[index].email.message}
-                    </p>
+              <div key={field.id} className="space-y-2 rounded-md border p-3">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 space-y-1">
+                    <Input
+                      placeholder="email@example.com"
+                      {...register(`invites.${index}.email`)}
+                    />
+                    {errors.invites?.[index]?.email && (
+                      <p className="text-xs text-destructive">
+                        {errors.invites[index].email.message}
+                      </p>
+                    )}
+                  </div>
+                  {fields.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={() => remove(index)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   )}
                 </div>
                 <RadioGroup
                   value={watch(`invites.${index}.role`)}
                   onValueChange={(val) => setValue(`invites.${index}.role`, val as InvitableRole)}
-                  className="flex gap-2"
+                  className="flex gap-4"
                 >
                   {INVITABLE_ROLES.map((role) => (
-                    <div key={role} className="flex items-center gap-1">
+                    <div key={role} className="flex items-center gap-1.5">
                       <RadioGroupItem value={role} id={`${field.id}-${role}`} />
                       <Label
                         htmlFor={`${field.id}-${role}`}
@@ -137,30 +161,24 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
                     </div>
                   ))}
                 </RadioGroup>
-                {fields.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 shrink-0"
-                    onClick={() => remove(index)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
               </div>
             ))}
           </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => append({ email: "", role: "editor" })}
-          >
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Add another
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => append({ email: "", role: "editor" })}
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Add another
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => reset(emptyInvites())}>
+              Clear
+            </Button>
+          </div>
 
           <div className="flex items-center justify-between border-t pt-4">
             <div className="flex items-center gap-2">

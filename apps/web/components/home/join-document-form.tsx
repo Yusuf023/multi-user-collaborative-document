@@ -13,7 +13,7 @@ import { apiPost } from "@/lib/api-client"
 import { API_ROUTES } from "@/lib/api-routes"
 
 const formSchema = z.object({
-  documentId: z.string().uuid("Please enter a valid document ID"),
+  documentId: z.uuid("Please enter a valid document ID"),
   email: z.email("Please enter a valid email address"),
   token: z.string().length(TOKEN_LENGTH, `Token must be ${TOKEN_LENGTH} characters`)
 })

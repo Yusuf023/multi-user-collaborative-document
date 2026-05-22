@@ -33,6 +33,7 @@ export async function joinDocument(req: Request, res: Response) {
   res.json({
     id: document.id,
     token: document.token,
+    title: document.title,
     collaborators: allCollaborators.map((c) => ({
       email: c.email,
       role: c.role,

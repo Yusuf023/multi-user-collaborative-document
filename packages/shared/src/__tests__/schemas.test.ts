@@ -253,6 +253,7 @@ describe("schemas", () => {
         const result = documentResponseSchema.safeParse({
           id: "550e8400-e29b-41d4-a716-446655440000",
           token: "abc123",
+          title: "Untitled Document",
           createdAt: "2024-01-01T00:00:00Z"
         })
         expect(result.success).toBe(true)
@@ -276,6 +277,7 @@ describe("schemas", () => {
         const result = documentDetailsSchema.safeParse({
           id: "550e8400-e29b-41d4-a716-446655440000",
           token: "abc123",
+          title: "My Document",
           collaborators: [
             { email: "user@test.com", role: "owner", color: "#E57373", joinedAt: "2024-01-01" }
           ],

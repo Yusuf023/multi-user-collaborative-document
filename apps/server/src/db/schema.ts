@@ -3,6 +3,7 @@ import { boolean, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-
 export const documents = pgTable("documents", {
   id: uuid("id").primaryKey().defaultRandom(),
   token: text("token").notNull(),
+  title: text("title").default("Untitled Document").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 })
 

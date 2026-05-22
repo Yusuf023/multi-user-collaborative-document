@@ -4,7 +4,7 @@ import type { Collaborator } from "@collab/shared"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { getInitials } from "@/lib/utils"
+import { cn, getInitials } from "@/lib/utils"
 
 interface ActiveUsersProps {
   collaborators: Collaborator[]
@@ -42,10 +42,17 @@ export function ActiveUsers({
           <TooltipContent>
             <div className="text-xs">
               <p className="font-medium">{collaborator.email}</p>
-              <p className="text-muted-foreground capitalize">{collaborator.role}</p>
-              <p className="text-muted-foreground">
-                {isActive(collaborator.email) ? "Active" : "Inactive"}
-              </p>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="capitalize">{collaborator.role}</span>
+                <span aria-hidden>&middot;</span>
+                <span
+                  className={cn(
+                    "inline-block size-1.5 rounded-full",
+                    isActive(collaborator.email) ? "bg-success" : "bg-muted-foreground/50"
+                  )}
+                />
+                <span>{isActive(collaborator.email) ? "Active" : "Inactive"}</span>
+              </div>
             </div>
           </TooltipContent>
         </Tooltip>
@@ -78,10 +85,17 @@ export function ActiveUsers({
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs truncate">{collaborator.email}</p>
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {collaborator.role} &middot;{" "}
-                      {isActive(collaborator.email) ? "Active" : "Inactive"}
-                    </p>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="capitalize">{collaborator.role}</span>
+                      <span aria-hidden>&middot;</span>
+                      <span
+                        className={cn(
+                          "inline-block size-1.5 rounded-full",
+                          isActive(collaborator.email) ? "bg-success" : "bg-muted-foreground/50"
+                        )}
+                      />
+                      <span>{isActive(collaborator.email) ? "Active" : "Inactive"}</span>
+                    </div>
                   </div>
                 </div>
               ))}

@@ -9,10 +9,12 @@ export async function createDocument(req: Request, res: Response) {
   const ownerEmail = normalizeEmail(req.body.ownerEmail)
   const token = nanoid(TOKEN_LENGTH)
 
-  const [document] = await db
-    .insert(documents)
-    .values({ token })
-    .returning({ id: documents.id, token: documents.token, createdAt: documents.createdAt })
+  const [document] = await db.insert(documents).values({ token }).returning({
+    id: documents.id,
+    token: documents.token,
+    title: documents.title,
+    createdAt: documents.createdAt
+  })
 
   await db.insert(collaborators).values({
     documentId: document.id,
@@ -24,6 +26,7 @@ export async function createDocument(req: Request, res: Response) {
   res.status(201).json({
     id: document.id,
     token: document.token,
+    title: document.title,
     createdAt: document.createdAt.toISOString()
   })
 }

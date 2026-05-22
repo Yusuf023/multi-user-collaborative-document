@@ -2,7 +2,8 @@ import {
   createDocumentSchema,
   inviteUsersSchema,
   joinDocumentSchema,
-  updateRoleSchema
+  updateRoleSchema,
+  updateTitleSchema
 } from "@collab/shared"
 import { Router } from "express"
 import {
@@ -10,7 +11,8 @@ import {
   getDocument,
   inviteUsers,
   joinDocument,
-  updateRole
+  updateRole,
+  updateTitle
 } from "../controllers/documents"
 import { authenticate } from "../middleware/authenticate"
 import { validate } from "../middleware/validate"
@@ -22,3 +24,4 @@ documentsRouter.post("/join", validate(joinDocumentSchema), joinDocument)
 documentsRouter.get("/:documentId", authenticate, getDocument)
 documentsRouter.post("/invite", authenticate, validate(inviteUsersSchema), inviteUsers)
 documentsRouter.patch("/role", authenticate, validate(updateRoleSchema), updateRole)
+documentsRouter.patch("/title", authenticate, validate(updateTitleSchema), updateTitle)

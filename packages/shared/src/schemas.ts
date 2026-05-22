@@ -2,7 +2,7 @@ import { z } from "zod/v4"
 import { ROLES, TOKEN_LENGTH } from "./constants"
 
 // Common
-export const documentIdSchema = z.string().uuid()
+export const documentIdSchema = z.uuid()
 export const emailSchema = z.email()
 export const tokenSchema = z.string().length(TOKEN_LENGTH)
 export const roleSchema = z.enum(ROLES)
@@ -41,6 +41,12 @@ export const updateRoleSchema = z.object({
   role: invitableRoleSchema
 })
 
+export const TITLE_MAX_LENGTH = 200
+export const updateTitleSchema = z.object({
+  documentId: documentIdSchema,
+  title: z.string().trim().min(1, "Title cannot be empty").max(TITLE_MAX_LENGTH)
+})
+
 export const addCommentSchema = z.object({
   documentId: documentIdSchema,
   content: z.string().min(1),
@@ -49,19 +55,20 @@ export const addCommentSchema = z.object({
 
 export const replyCommentSchema = z.object({
   documentId: documentIdSchema,
-  commentId: z.string().uuid(),
+  commentId: z.uuid(),
   content: z.string().min(1)
 })
 
 export const resolveCommentSchema = z.object({
   documentId: documentIdSchema,
-  commentId: z.string().uuid()
+  commentId: z.uuid()
 })
 
 // Response schemas
 export const documentResponseSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   token: z.string(),
+  title: z.string(),
   createdAt: z.string()
 })
 
@@ -73,21 +80,22 @@ export const collaboratorSchema = z.object({
 })
 
 export const documentDetailsSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   token: z.string(),
+  title: z.string(),
   collaborators: z.array(collaboratorSchema),
   createdAt: z.string()
 })
 
 export const commentReplySchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   content: z.string(),
   authorEmail: z.string(),
   createdAt: z.string()
 })
 
 export const commentSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   content: z.string(),
   quotedText: z.string(),
   authorEmail: z.string(),
@@ -107,6 +115,7 @@ export type CreateDocumentRequest = z.infer<typeof createDocumentSchema>
 export type JoinDocumentRequest = z.infer<typeof joinDocumentSchema>
 export type InviteUsersRequest = z.infer<typeof inviteUsersSchema>
 export type UpdateRoleRequest = z.infer<typeof updateRoleSchema>
+export type UpdateTitleRequest = z.infer<typeof updateTitleSchema>
 export type AddCommentRequest = z.infer<typeof addCommentSchema>
 export type ReplyCommentRequest = z.infer<typeof replyCommentSchema>
 export type ResolveCommentRequest = z.infer<typeof resolveCommentSchema>

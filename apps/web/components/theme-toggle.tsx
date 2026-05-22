@@ -21,11 +21,11 @@ export function ThemeToggle() {
       nextTheme !== resolvedTheme
     ) {
       document.documentElement.style.viewTransitionName = "theme-transition"
-      await (document as Document & {
-        startViewTransition: (cb: () => void) => { finished: Promise<void> }
-      })
-        .startViewTransition(update)
-        .finished
+      await (
+        document as Document & {
+          startViewTransition: (cb: () => void) => { finished: Promise<void> }
+        }
+      ).startViewTransition(update).finished
       document.documentElement.style.viewTransitionName = ""
     } else {
       update()

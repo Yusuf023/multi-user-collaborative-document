@@ -1,0 +1,1 @@
+ALTER TABLE "documents" ADD COLUMN "title" text DEFAULT 'Untitled Document' NOT NULL;

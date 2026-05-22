@@ -1,11 +1,9 @@
 "use client"
 
 import type { Collaborator } from "@collab/shared"
-import { HocuspocusProvider } from "@hocuspocus/provider"
+import type { HocuspocusProvider } from "@hocuspocus/provider"
 import type { Editor } from "@tiptap/react"
-import { useCallback, useEffect, useState } from "react"
-import { env } from "@/env"
-import { useActiveUsers } from "@/hooks/use-active-users"
+import { useState } from "react"
 import { useCommentsSync } from "@/hooks/use-comments-sync"
 import { CommentsPanel } from "./comments-panel"
 import { EditorToolbar } from "./editor-toolbar"
@@ -17,8 +15,9 @@ interface DocumentEditorProps {
   token: string
   currentUser: Collaborator
   collaborators: Collaborator[]
-  onConnectionChange: (connected: boolean) => void
-  onActiveUsersChange: (emails: string[]) => void
+  provider: HocuspocusProvider | null
+  connected: boolean
+  activeEmails: string[]
 }
 
 export function DocumentEditor({
@@ -26,50 +25,19 @@ export function DocumentEditor({
   token,
   currentUser,
   collaborators,
-  onConnectionChange,
-  onActiveUsersChange
+  provider,
+  connected,
+  activeEmails
 }: DocumentEditorProps) {
-  const [provider, setProvider] = useState<HocuspocusProvider | null>(null)
-  const [connected, setConnected] = useState(false)
   const [selectedText, setSelectedText] = useState("")
   const [editorInstance, setEditorInstance] = useState<Editor | null>(null)
 
-  const activeEmails = useActiveUsers(provider)
   const { comments, notifyCommentsChanged } = useCommentsSync(
     provider,
     documentId,
     currentUser.email,
     token
   )
-
-  useEffect(() => {
-    onActiveUsersChange(activeEmails)
-  }, [activeEmails, onActiveUsersChange])
-
-  const onConnectionChangeStable = useCallback(
-    (isConnected: boolean) => {
-      setConnected(isConnected)
-      onConnectionChange(isConnected)
-    },
-    [onConnectionChange]
-  )
-
-  useEffect(() => {
-    const hocuspocusProvider = new HocuspocusProvider({
-      url: `${env.NEXT_PUBLIC_WS_URL}/collaboration`,
-      name: documentId,
-      token: `${currentUser.email}|${token}`,
-      onStatus({ status }) {
-        onConnectionChangeStable(status === "connected")
-      }
-    })
-
-    setProvider(hocuspocusProvider)
-
-    return () => {
-      hocuspocusProvider.destroy()
-    }
-  }, [documentId, token, currentUser.email, onConnectionChangeStable])
 
   const canEdit = currentUser.role === "owner" || currentUser.role === "editor"
   const canComment = currentUser.role !== "viewer"
