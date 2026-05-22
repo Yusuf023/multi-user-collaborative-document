@@ -3,9 +3,13 @@
 import type { Collaborator, DocumentDetails } from "@collab/shared"
 import { documentDetailsSchema } from "@collab/shared"
 import { HocuspocusProvider } from "@hocuspocus/provider"
+import { ShieldAlert } from "lucide-react"
+import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 import { DocumentEditor } from "@/components/document/document-editor"
 import { DocumentHeader } from "@/components/document/document-header"
+import { Button } from "@/components/ui/button"
+import { GradientIcon } from "@/components/ui/gradient-icon"
 import { env } from "@/env"
 import { useActiveUsers } from "@/hooks/use-active-users"
 import { apiGet, authHeaders } from "@/lib/api-client"
@@ -120,22 +124,32 @@ export function DocumentPageClient({ documentId, email, token }: DocumentPageCli
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground">Loading document...</p>
-      </div>
+      <main className="flex min-h-screen items-center justify-center p-4">
+        <p className="text-sm text-muted-foreground">Loading document...</p>
+      </main>
     )
   }
 
   if (error || !document || !currentUser) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-destructive font-medium">{error || "Access denied"}</p>
-          <a href="/" className="text-sm text-muted-foreground underline">
-            Go back home
-          </a>
+      <main className="flex min-h-screen items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-6 text-center">
+          <div className="flex justify-center">
+            <GradientIcon color="#ef4444" size="xl">
+              <ShieldAlert className="size-7 text-foreground" strokeWidth={1.75} />
+            </GradientIcon>
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold">Access denied</h1>
+            <p className="text-sm text-muted-foreground">
+              {error || "You do not have access to this document. Ask the owner to invite you."}
+            </p>
+          </div>
+          <Link href="/">
+            <Button variant="outline">Go back home</Button>
+          </Link>
         </div>
-      </div>
+      </main>
     )
   }
 

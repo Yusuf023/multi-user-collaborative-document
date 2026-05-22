@@ -33,13 +33,25 @@ export function DocumentEditor({
 }: DocumentEditorProps) {
   const [selectedText, setSelectedText] = useState("")
   const [editorInstance, setEditorInstance] = useState<Editor | null>(null)
-  // Captured when the user clicks the floating "add comment" button. Held at the
-  // editor level because the user types the comment content in the right-hand
-  // panel, by which time the editor selection may have moved.
-  const [pendingCommentRange, setPendingCommentRange] = useState<{
-    from: number
-    to: number
+  // Comment draft is opened ONLY by an explicit click on the floating button —
+  // never just by selecting text (selection has many other uses: bold, copy,
+  // etc.). The same floating button also updates an existing draft's target
+  // text/range so the user can re-aim their comment without losing what they
+  // already typed. The draft persists until the user submits or closes it.
+  const [commentDraft, setCommentDraft] = useState<{
+    quotedText: string
+    range: { from: number; to: number }
   } | null>(null)
+
+  const handleSelectionChange = (text: string) => {
+    setSelectedText(text)
+  }
+
+  const openOrUpdateDraft = (quotedText: string, range: { from: number; to: number }) => {
+    setCommentDraft({ quotedText, range })
+  }
+
+  const closeDraft = () => setCommentDraft(null)
 
   const { comments, notifyCommentsChanged } = useCommentsSync(
     provider,
@@ -62,16 +74,13 @@ export function DocumentEditor({
               provider={provider}
               currentUser={currentUser}
               canEdit={canEdit}
-              onSelectionChange={setSelectedText}
+              onSelectionChange={handleSelectionChange}
               onEditorReady={setEditorInstance}
               connected={connected}
             />
           )}
           {canComment && selectedText && editorInstance && (
-            <FloatingCommentButton
-              editor={editorInstance}
-              onRequestComment={setPendingCommentRange}
-            />
+            <FloatingCommentButton editor={editorInstance} onRequestComment={openOrUpdateDraft} />
           )}
         </div>
       </div>
@@ -82,13 +91,12 @@ export function DocumentEditor({
         comments={comments}
         currentUser={currentUser}
         canComment={canComment}
-        selectedText={selectedText}
+        commentDraft={commentDraft}
         onCommentAdded={notifyCommentsChanged}
+        onDraftClose={closeDraft}
         collaborators={collaborators}
         activeEmails={activeEmails}
         editor={editorInstance}
-        pendingCommentRange={pendingCommentRange}
-        onPendingRangeCleared={() => setPendingCommentRange(null)}
       />
     </div>
   )

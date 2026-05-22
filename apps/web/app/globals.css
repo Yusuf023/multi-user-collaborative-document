@@ -113,18 +113,16 @@
   pointer-events: none;
 }
 
-/* Comment mark — anchors a comment thread to a range of text. The underline
-   color is set inline by the mark extension (text-decoration-color: <user color>)
-   so each commenter's underline is visually distinct. */
-.tiptap .comment-mark {
+/* Comment mark — anchors a comment thread to a range of text.
+   text-decoration-color is set inline by the mark extension per commenter. */
+.tiptap span.comment-mark {
   text-decoration: underline;
-  text-decoration-thickness: 2px;
   text-underline-offset: 3px;
   cursor: pointer;
   transition: background-color 120ms ease;
 }
 
-.tiptap .comment-mark:hover {
+.tiptap span.comment-mark:hover {
   background-color: color-mix(in oklch, currentColor 8%, transparent);
 }
 

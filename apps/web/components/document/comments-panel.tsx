@@ -4,7 +4,7 @@ import type { Collaborator, Comment } from "@collab/shared"
 import { commentSchema } from "@collab/shared"
 import { zodResolver } from "@hookform/resolvers/zod"
 import type { Editor } from "@tiptap/react"
-import { Check, MessageSquare, RotateCcw, Send } from "lucide-react"
+import { Check, MessageSquare, RotateCcw, Send, X } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
@@ -28,13 +28,12 @@ interface CommentsPanelProps {
   comments: Comment[]
   currentUser: Collaborator
   canComment: boolean
-  selectedText: string
+  commentDraft: { quotedText: string; range: { from: number; to: number } } | null
   onCommentAdded: () => void
+  onDraftClose: () => void
   collaborators: Collaborator[]
   activeEmails: string[]
   editor: Editor | null
-  pendingCommentRange: { from: number; to: number } | null
-  onPendingRangeCleared: () => void
 }
 
 export function CommentsPanel({
@@ -43,12 +42,11 @@ export function CommentsPanel({
   comments,
   currentUser,
   canComment,
-  selectedText,
+  commentDraft,
   onCommentAdded,
+  onDraftClose,
   collaborators,
-  editor,
-  pendingCommentRange,
-  onPendingRangeCleared
+  editor
 }: CommentsPanelProps) {
   return (
     <aside className="w-80 border-l flex flex-col overflow-hidden" data-comments-panel>
@@ -58,16 +56,15 @@ export function CommentsPanel({
         <span className="ml-auto text-xs text-muted-foreground">{comments.length}</span>
       </div>
 
-      {canComment && selectedText && (
+      {canComment && commentDraft && (
         <AddCommentForm
           documentId={documentId}
           token={token}
           currentUser={currentUser}
-          selectedText={selectedText}
+          draft={commentDraft}
           onCommentAdded={onCommentAdded}
+          onClose={onDraftClose}
           editor={editor}
-          pendingCommentRange={pendingCommentRange}
-          onPendingRangeCleared={onPendingRangeCleared}
         />
       )}
 
@@ -100,20 +97,18 @@ function AddCommentForm({
   documentId,
   token,
   currentUser,
-  selectedText,
+  draft,
   onCommentAdded,
-  editor,
-  pendingCommentRange,
-  onPendingRangeCleared
+  onClose,
+  editor
 }: {
   documentId: string
   token: string
   currentUser: Collaborator
-  selectedText: string
+  draft: { quotedText: string; range: { from: number; to: number } }
   onCommentAdded: () => void
+  onClose: () => void
   editor: Editor | null
-  pendingCommentRange: { from: number; to: number } | null
-  onPendingRangeCleared: () => void
 }) {
   const {
     register,
@@ -128,24 +123,25 @@ function AddCommentForm({
     try {
       const created = await apiPost(
         API_ROUTES.comments.create,
-        { documentId, content: data.content, quotedText: selectedText },
+        { documentId, content: data.content, quotedText: draft.quotedText },
         commentSchema,
         { headers: authHeaders(currentUser.email, token) }
       )
 
-      // If the user can edit, anchor the comment thread to the original
-      // selection range by setting our custom comment mark.
-      if (created && editor && pendingCommentRange && editor.isEditable) {
+      // Anchor the comment thread to the range captured when the draft opened —
+      // NOT the live editor selection, which may have moved since.
+      if (created && editor?.isEditable) {
         editor
           .chain()
-          .setTextSelection(pendingCommentRange)
+          .focus()
+          .setTextSelection(draft.range)
           .setCommentMark({ commentId: created.id, color: currentUser.color })
           .run()
       }
 
       reset()
-      onPendingRangeCleared()
       onCommentAdded()
+      onClose()
       toast.success("Comment added")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add comment")
@@ -154,12 +150,24 @@ function AddCommentForm({
 
   return (
     <div className="border-b p-4 space-y-2">
-      <p
-        className="text-xs italic border-l-2 pl-2 truncate"
-        style={{ borderColor: currentUser.color }}
-      >
-        &ldquo;{selectedText}&rdquo;
-      </p>
+      <div className="flex items-start gap-2">
+        <p
+          className="flex-1 text-xs italic border-l-2 pl-2 truncate"
+          style={{ borderColor: currentUser.color }}
+        >
+          &ldquo;{draft.quotedText}&rdquo;
+        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={onClose}
+          aria-label="Discard draft"
+          className="shrink-0 -mt-0.5"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
       <form onSubmit={handleSubmit(onSubmit)} className="flex gap-2">
         <Input placeholder="Add a comment..." className="h-8 text-sm" {...register("content")} />
         <Button type="submit" size="icon" className="h-8 w-8 shrink-0" disabled={isSubmitting}>

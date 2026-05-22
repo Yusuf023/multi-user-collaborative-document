@@ -55,8 +55,7 @@ export function TiptapEditor({
     onSelectionUpdate({ editor }) {
       const { from, to } = editor.state.selection
       if (from !== to) {
-        const text = editor.state.doc.textBetween(from, to, " ")
-        onSelectionChange(text)
+        onSelectionChange(editor.state.doc.textBetween(from, to, " "))
       } else {
         onSelectionChange("")
       }
@@ -87,7 +86,7 @@ export function TiptapEditor({
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="mx-auto max-w-6xl">
       <EditorContent editor={editor} className="tiptap" />
     </div>
   )
