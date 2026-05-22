@@ -4,6 +4,7 @@ import Image from "next/image"
 import { useState } from "react"
 import { CreateDocumentForm } from "@/components/home/create-document-form"
 import { JoinDocumentForm } from "@/components/home/join-document-form"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { GradientIcon } from "@/components/ui/gradient-icon"
 
@@ -11,7 +12,10 @@ export default function HomePage() {
   const [mode, setMode] = useState<"idle" | "create" | "join">("idle")
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
+    <main className="relative flex min-h-screen items-center justify-center p-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md space-y-6 text-center">
         <div className="flex justify-center">
           <GradientIcon color="var(--color-foreground)" size="xl">

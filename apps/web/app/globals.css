@@ -82,14 +82,34 @@
   content: attr(data-placeholder);
 }
 
+/* Theme switch view transition */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (view-transition-name: none) {
+    ::view-transition-new(theme-transition) {
+      clip-path: inset(0 0 100% 0);
+      animation: slide-in-from-top 0.65s forwards cubic-bezier(0.65, 0, 0.35, 1);
+    }
+
+    ::view-transition-old(theme-transition) {
+      animation: none;
+    }
+
+    @keyframes slide-in-from-top {
+      to {
+        clip-path: inset(0 0 0 0);
+      }
+    }
+  }
+}
+
 /* Collaboration cursor styles */
 .collaboration-cursor__caret {
-  @apply relative border-l-2 border-r-0 ml-[-1px] mr-[-1px] pointer-events-none;
+  @apply relative border-l-2 border-r-0 -ml-px -mr-px pointer-events-none;
   word-break: normal;
 }
 
 .collaboration-cursor__label {
-  @apply absolute top-[-1.4em] left-[-1px] text-xs text-white px-1.5 py-0.5 rounded-t rounded-br whitespace-nowrap select-none;
+  @apply absolute top-[-1.4em] -left-px text-xs text-white px-1.5 py-0.5 rounded-t-lg rounded-br-lg whitespace-nowrap select-none;
   font-size: 12px;
   font-style: normal;
   font-weight: 600;
@@ -140,6 +160,7 @@
 }
 
 :root {
+  --color-gradient-fill: oklch(0.97 0 0);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -175,6 +196,7 @@
 }
 
 .dark {
+  --color-gradient-fill: oklch(0.205 0 0);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

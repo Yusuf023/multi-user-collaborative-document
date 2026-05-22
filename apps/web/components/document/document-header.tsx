@@ -1,6 +1,7 @@
 "use client"
 
 import type { Collaborator, DocumentDetails } from "@collab/shared"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { ActiveUsers } from "./active-users"
 import { ConnectionStatus } from "./connection-status"
 import { InviteDialog } from "./invite-dialog"
@@ -53,6 +54,7 @@ export function DocumentHeader({
             onInvited={onCollaboratorsUpdate}
           />
         )}
+        <ThemeToggle />
       </div>
     </header>
   )

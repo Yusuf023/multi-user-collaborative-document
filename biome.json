@@ -16,7 +16,8 @@
       "!build",
       "!apps/web/components/ui",
       "!**/next-env.d.ts",
-      "!**/coverage"
+      "!**/coverage",
+      "!apps/server/drizzle"
     ]
   },
   "formatter": {
