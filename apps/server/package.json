@@ -1,0 +1,43 @@
+{
+  "name": "@collab/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@collab/shared": "workspace:*",
+    "@hocuspocus/extension-database": "^4.1.0",
+    "@hocuspocus/server": "^4.1.0",
+    "cors": "^2.8.6",
+    "drizzle-orm": "^0.45.2",
+    "envalid": "^8.1.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "express-ws": "^5.0.2",
+    "ioredis": "^5.10.1",
+    "nanoid": "^5.1.11",
+    "postgres": "^3.4.9",
+    "resend": "^6.12.3",
+    "yjs": "^13.6.30",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/express-ws": "^3.0.6",
+    "@types/node": "^25.9.1",
+    "@vitest/coverage-v8": "^4.1.7",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}
