@@ -37,6 +37,9 @@ export async function joinDocument(req: Request, res: Response) {
     finalized: document.finalized,
     finalizedBy: document.finalizedBy,
     finalizedAt: document.finalizedAt?.toISOString() ?? null,
+    approved: document.approved,
+    approvedBy: document.approvedBy,
+    approvedAt: document.approvedAt?.toISOString() ?? null,
     collaborators: allCollaborators.map((c) => ({
       email: c.email,
       role: c.role,

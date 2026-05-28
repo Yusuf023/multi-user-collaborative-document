@@ -171,6 +171,9 @@ describe("documents routes", () => {
         finalized: false,
         finalizedBy: null,
         finalizedAt: null,
+        approved: false,
+        approvedBy: null,
+        approvedAt: null,
         createdAt: new Date("2024-01-01")
       }
       mockDbQuery.documents.findFirst.mockResolvedValue(doc)
@@ -202,6 +205,9 @@ describe("documents routes", () => {
         finalized: false,
         finalizedBy: null,
         finalizedAt: null,
+        approved: false,
+        approvedBy: null,
+        approvedAt: null,
         collaborators: [
           {
             email: "user@test.com",

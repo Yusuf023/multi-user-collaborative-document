@@ -17,6 +17,7 @@ import { API_ROUTES } from "@/lib/api-routes"
 
 const COLLABORATORS_META_KEY = "collaboratorsVersion"
 const FINALIZED_META_KEY = "finalized"
+const APPROVED_META_KEY = "approved"
 
 interface DocumentPageClientProps {
   documentId: string
@@ -97,6 +98,11 @@ export function DocumentPageClient({ documentId, email, token }: DocumentPageCli
           prev && prev.finalized !== finalized ? { ...prev, finalized } : prev
         )
       }
+
+      const approved = meta.get(APPROVED_META_KEY)
+      if (typeof approved === "boolean") {
+        setDocument((prev) => (prev && prev.approved !== approved ? { ...prev, approved } : prev))
+      }
     }
 
     meta.observe(observer)
@@ -120,14 +126,26 @@ export function DocumentPageClient({ documentId, email, token }: DocumentPageCli
 
   const handleFinalizedChange = useCallback(
     (finalized: boolean) => {
-      // Optimistic local update for this client.
-      setDocument((prev) => (prev ? { ...prev, finalized } : prev))
-      // Drive every other connected client instantly via a boolean in the Yjs
-      // meta map (same mechanism as the title). The observer above applies it.
-      provider?.document.getMap("meta").set(FINALIZED_META_KEY, finalized)
+      // Reopening clears approval (server resets the DB flag too).
+      setDocument((prev) =>
+        prev ? { ...prev, finalized, approved: finalized ? prev.approved : false } : prev
+      )
+      // Drive every other connected client instantly via booleans in the Yjs
+      // meta map (same mechanism as the title). The observer above applies them.
+      const meta = provider?.document.getMap("meta")
+      meta?.set(FINALIZED_META_KEY, finalized)
+      if (!finalized) meta?.set(APPROVED_META_KEY, false)
     },
     [provider]
   )
+
+  const handleApprovedChange = useCallback((approved: boolean) => {
+    // Optimistic local feedback for the reviewer. The reviewer's WS connection
+    // is read-only, so the authoritative broadcast comes from the server (the
+    // approve controller writes meta.approved); the observer above applies it
+    // for every client, including this one.
+    setDocument((prev) => (prev ? { ...prev, approved } : prev))
+  }, [])
 
   if (loading) {
     return (
@@ -171,6 +189,7 @@ export function DocumentPageClient({ documentId, email, token }: DocumentPageCli
         provider={provider}
         onCollaboratorsUpdate={handleCollaboratorsUpdate}
         onFinalizedChange={handleFinalizedChange}
+        onApprovedChange={handleApprovedChange}
       />
       <DocumentEditor
         documentId={documentId}

@@ -57,6 +57,10 @@ export const finalizeDocumentSchema = z.object({
   finalized: z.boolean()
 })
 
+export const approveDocumentSchema = z.object({
+  documentId: documentIdSchema
+})
+
 export const addCommentSchema = z.object({
   documentId: documentIdSchema,
   content: z.string().min(1),
@@ -96,6 +100,9 @@ export const documentDetailsSchema = z.object({
   finalized: z.boolean(),
   finalizedBy: z.string().nullable(),
   finalizedAt: z.string().nullable(),
+  approved: z.boolean(),
+  approvedBy: z.string().nullable(),
+  approvedAt: z.string().nullable(),
   collaborators: z.array(collaboratorSchema),
   createdAt: z.string()
 })
@@ -131,6 +138,7 @@ export type UpdateRoleRequest = z.infer<typeof updateRoleSchema>
 export type UpdateTitleRequest = z.infer<typeof updateTitleSchema>
 export type RemoveCollaboratorRequest = z.infer<typeof removeCollaboratorSchema>
 export type FinalizeDocumentRequest = z.infer<typeof finalizeDocumentSchema>
+export type ApproveDocumentRequest = z.infer<typeof approveDocumentSchema>
 export type AddCommentRequest = z.infer<typeof addCommentSchema>
 export type ReplyCommentRequest = z.infer<typeof replyCommentSchema>
 export type ResolveCommentRequest = z.infer<typeof resolveCommentSchema>

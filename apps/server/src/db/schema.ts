@@ -12,6 +12,9 @@ export const documents = sqliteTable("documents", {
   finalized: integer("finalized", { mode: "boolean" }).default(false).notNull(),
   finalizedBy: text("finalized_by"),
   finalizedAt: integer("finalized_at", { mode: "timestamp_ms" }),
+  approved: integer("approved", { mode: "boolean" }).default(false).notNull(),
+  approvedBy: text("approved_by"),
+  approvedAt: integer("approved_at", { mode: "timestamp_ms" }),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs)
 })
 

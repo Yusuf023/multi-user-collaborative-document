@@ -1,4 +1,5 @@
 import {
+  approveDocumentSchema,
   createDocumentSchema,
   finalizeDocumentSchema,
   inviteUsersSchema,
@@ -9,6 +10,7 @@ import {
 } from "@collab/shared"
 import { Router } from "express"
 import {
+  approveDocument,
   createDocument,
   finalizeDocument,
   getDocument,
@@ -36,3 +38,4 @@ documentsRouter.delete(
   removeCollaborator
 )
 documentsRouter.patch("/finalize", authenticate, validate(finalizeDocumentSchema), finalizeDocument)
+documentsRouter.patch("/approve", authenticate, validate(approveDocumentSchema), approveDocument)

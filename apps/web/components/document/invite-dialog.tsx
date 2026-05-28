@@ -57,6 +57,12 @@ interface InviteDialogProps {
   token: string
   currentUser: Collaborator
   onInvited: (collaborators: Collaborator[]) => void
+  // When set, the role selector is hidden and every invite uses this role.
+  lockedRole?: InvitableRole
+  // Controlled mode (used when opened from a menu). Omit for the default
+  // self-triggered "Share" button.
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 interface InviteLink {
@@ -64,8 +70,8 @@ interface InviteLink {
   url: string
 }
 
-const emptyInvites = (): InviteFormData => ({
-  invites: [{ email: "", role: "editor" }],
+const emptyInvites = (role: InvitableRole): InviteFormData => ({
+  invites: [{ email: "", role }],
   sendEmail: true
 })
 
@@ -99,8 +105,21 @@ function CopyLinkRow({ email, url }: InviteLink) {
   )
 }
 
-export function InviteDialog({ documentId, token, currentUser, onInvited }: InviteDialogProps) {
-  const [open, setOpen] = useState(false)
+export function InviteDialog({
+  documentId,
+  token,
+  currentUser,
+  onInvited,
+  lockedRole,
+  open,
+  onOpenChange
+}: InviteDialogProps) {
+  const defaultRole: InvitableRole = lockedRole ?? "editor"
+  const isControlled = open !== undefined
+  const isApprovalRequest = lockedRole === "reviewer"
+
+  const [internalOpen, setInternalOpen] = useState(false)
+  const dialogOpen = isControlled ? open : internalOpen
   const [invitedLinks, setInvitedLinks] = useState<InviteLink[] | null>(null)
 
   const {
@@ -113,7 +132,7 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
     formState: { errors, isSubmitting }
   } = useForm<InviteFormData>({
     resolver: zodResolver(inviteFormSchema),
-    defaultValues: emptyInvites()
+    defaultValues: emptyInvites(defaultRole)
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: "invites" })
@@ -132,16 +151,17 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
   }
 
   const handleOpenChange = (next: boolean) => {
-    setOpen(next)
+    if (isControlled) onOpenChange?.(next)
+    else setInternalOpen(next)
     // Reset form + results whenever dialog closes so the next open is fresh
     if (!next) {
-      reset(emptyInvites())
+      reset(emptyInvites(defaultRole))
       setInvitedLinks(null)
     }
   }
 
   const startOver = () => {
-    reset(emptyInvites())
+    reset(emptyInvites(defaultRole))
     setInvitedLinks(null)
   }
 
@@ -155,9 +175,16 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
       )
       if (result) {
         onInvited(result.collaborators as Collaborator[])
-        toast.success(data.sendEmail ? "Invitations sent" : "Invite links created")
-        // Show copyable links for everyone we just invited, then let the user
-        // close or invite more. Links work whether or not the email was sent.
+        const sent = data.sendEmail
+        toast.success(
+          isApprovalRequest
+            ? sent
+              ? "Approval requested"
+              : "Approval links created"
+            : sent
+              ? "Invitations sent"
+              : "Invite links created"
+        )
         setInvitedLinks(
           data.invites.map((i) => ({
             email: i.email,
@@ -170,20 +197,36 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
     }
   }
 
+  const title = isApprovalRequest ? "Request approval" : "Invite collaborators"
+  const description = invitedLinks
+    ? "Share these links with your collaborators."
+    : isApprovalRequest
+      ? "Invite reviewers to review and approve this document."
+      : "Add people to collaborate on this document."
+  const submitLabel = isSubmitting
+    ? sendEmail
+      ? "Sending..."
+      : "Creating..."
+    : isApprovalRequest
+      ? sendEmail
+        ? "Send request"
+        : "Create links"
+      : sendEmail
+        ? "Send invites"
+        : "Create links"
+
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={<Button size="sm" variant="outline" />}>
-        <Share2 className="mr-1.5 h-3.5 w-3.5" />
-        Share
-      </DialogTrigger>
+    <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
+      {!isControlled && (
+        <DialogTrigger render={<Button size="sm" variant="outline" />}>
+          <Share2 className="mr-1.5 h-3.5 w-3.5" />
+          Share
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Invite collaborators</DialogTitle>
-          <DialogDescription>
-            {invitedLinks
-              ? "Share these links with your collaborators."
-              : "Add people to collaborate on this document."}
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         {invitedLinks ? (
@@ -196,7 +239,7 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
             <div className="flex items-center justify-between border-t pt-4">
               <Button type="button" variant="outline" size="sm" onClick={startOver}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Invite more
+                {isApprovalRequest ? "Request more" : "Invite more"}
               </Button>
               <Button type="button" onClick={() => handleOpenChange(false)}>
                 Done
@@ -232,23 +275,27 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
                       </Button>
                     )}
                   </div>
-                  <RadioGroup
-                    value={watch(`invites.${index}.role`)}
-                    onValueChange={(val) => setValue(`invites.${index}.role`, val as InvitableRole)}
-                    className="flex gap-4"
-                  >
-                    {INVITABLE_ROLES.map((role) => (
-                      <div key={role} className="flex items-center gap-1.5">
-                        <RadioGroupItem value={role} id={`${field.id}-${role}`} />
-                        <Label
-                          htmlFor={`${field.id}-${role}`}
-                          className="text-xs capitalize cursor-pointer"
-                        >
-                          {role}
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
+                  {!lockedRole && (
+                    <RadioGroup
+                      value={watch(`invites.${index}.role`)}
+                      onValueChange={(val) =>
+                        setValue(`invites.${index}.role`, val as InvitableRole)
+                      }
+                      className="flex gap-4"
+                    >
+                      {INVITABLE_ROLES.map((role) => (
+                        <div key={role} className="flex items-center gap-1.5">
+                          <RadioGroupItem value={role} id={`${field.id}-${role}`} />
+                          <Label
+                            htmlFor={`${field.id}-${role}`}
+                            className="text-xs capitalize cursor-pointer"
+                          >
+                            {role}
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  )}
                 </div>
               ))}
             </div>
@@ -258,12 +305,17 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => append({ email: "", role: "editor" })}
+                onClick={() => append({ email: "", role: defaultRole })}
               >
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
                 Add another
               </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => reset(emptyInvites())}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => reset(emptyInvites(defaultRole))}
+              >
                 Clear
               </Button>
             </div>
@@ -274,13 +326,7 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
                 <Label className="text-sm">Send invite email</Label>
               </div>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting
-                  ? sendEmail
-                    ? "Sending..."
-                    : "Creating..."
-                  : sendEmail
-                    ? "Send invites"
-                    : "Create links"}
+                {submitLabel}
               </Button>
             </div>
           </form>

@@ -1,3 +1,4 @@
+export { approveDocument } from "./approve"
 export { createDocument } from "./create"
 export { finalizeDocument } from "./finalize"
 export { getDocument } from "./get"

@@ -4,11 +4,13 @@ import type { Collaborator, DocumentDetails } from "@collab/shared"
 import type { HocuspocusProvider } from "@hocuspocus/provider"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { ActiveUsers } from "./active-users"
+import { ApproveButton } from "./approve-button"
 import { ConnectionStatus } from "./connection-status"
 import { DocumentTitle } from "./document-title"
 import { FinalizeButton } from "./finalize-button"
 import { InviteDialog } from "./invite-dialog"
 import { RoleManager } from "./role-manager"
+import { SendMenu } from "./send/send-menu"
 
 interface DocumentHeaderProps {
   document: DocumentDetails
@@ -19,6 +21,7 @@ interface DocumentHeaderProps {
   provider: HocuspocusProvider | null
   onCollaboratorsUpdate: (collaborators: Collaborator[]) => void
   onFinalizedChange: (finalized: boolean) => void
+  onApprovedChange: (approved: boolean) => void
 }
 
 export function DocumentHeader({
@@ -29,11 +32,16 @@ export function DocumentHeader({
   token,
   provider,
   onCollaboratorsUpdate,
-  onFinalizedChange
+  onFinalizedChange,
+  onApprovedChange
 }: DocumentHeaderProps) {
   const isPrivileged = currentUser.role === "owner" || currentUser.role === "editor"
   // Title editing is blocked when the document is finalized
   const canEditTitle = isPrivileged && !document.finalized
+  // The send dropdown is for owners/editors once the doc is locked; reviewers
+  // get an Approve action instead.
+  const canSend = isPrivileged && document.finalized
+  const canApprove = currentUser.role === "reviewer" && document.finalized && !document.approved
 
   return (
     <header className="flex items-center justify-between border-b px-4 py-3 gap-3">
@@ -46,7 +54,11 @@ export function DocumentHeader({
           token={token}
           canEdit={canEditTitle}
         />
-        <ConnectionStatus connected={connected} finalized={document.finalized} />
+        <ConnectionStatus
+          connected={connected}
+          finalized={document.finalized}
+          approved={document.approved}
+        />
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
@@ -70,6 +82,22 @@ export function DocumentHeader({
             token={token}
             currentUser={currentUser}
             onInvited={onCollaboratorsUpdate}
+          />
+        )}
+        {canSend && (
+          <SendMenu
+            documentId={document.id}
+            token={token}
+            currentUser={currentUser}
+            onInvited={onCollaboratorsUpdate}
+          />
+        )}
+        {canApprove && (
+          <ApproveButton
+            documentId={document.id}
+            token={token}
+            currentUserEmail={currentUser.email}
+            onApproved={() => onApprovedChange(true)}
           />
         )}
         {isPrivileged && (

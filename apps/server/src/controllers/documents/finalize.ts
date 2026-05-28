@@ -22,13 +22,19 @@ export async function finalizeDocument(req: Request, res: Response) {
     .set({
       finalized,
       finalizedBy: finalized ? requesterEmail : null,
-      finalizedAt: finalized ? new Date() : null
+      finalizedAt: finalized ? new Date() : null,
+      // Reopening clears any prior approval — collaborators must request and
+      // grant approval again on the next finalisation.
+      ...(finalized ? {} : { approved: false, approvedBy: null, approvedAt: null })
     })
     .where(eq(documents.id, documentId))
     .returning({
       finalized: documents.finalized,
       finalizedBy: documents.finalizedBy,
-      finalizedAt: documents.finalizedAt
+      finalizedAt: documents.finalizedAt,
+      approved: documents.approved,
+      approvedBy: documents.approvedBy,
+      approvedAt: documents.approvedAt
     })
 
   if (!updated) {
@@ -42,6 +48,9 @@ export async function finalizeDocument(req: Request, res: Response) {
   res.json({
     finalized: updated.finalized,
     finalizedBy: updated.finalizedBy,
-    finalizedAt: updated.finalizedAt?.toISOString() ?? null
+    finalizedAt: updated.finalizedAt?.toISOString() ?? null,
+    approved: updated.approved,
+    approvedBy: updated.approvedBy,
+    approvedAt: updated.approvedAt?.toISOString() ?? null
   })
 }

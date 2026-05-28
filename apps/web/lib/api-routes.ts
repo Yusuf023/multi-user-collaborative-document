@@ -11,7 +11,8 @@ export const API_ROUTES = {
     updateRole: `${DOCUMENTS_BASE_URL}/role`,
     updateTitle: `${DOCUMENTS_BASE_URL}/title`,
     removeCollaborator: `${DOCUMENTS_BASE_URL}/collaborator`,
-    finalize: `${DOCUMENTS_BASE_URL}/finalize`
+    finalize: `${DOCUMENTS_BASE_URL}/finalize`,
+    approve: `${DOCUMENTS_BASE_URL}/approve`
   },
   comments: {
     list: (documentId: string) => `${COMMENTS_BASE_URL}/${documentId}`,
