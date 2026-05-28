@@ -371,15 +371,15 @@ sequenceDiagram
 sequenceDiagram
     actor A as User A
     participant WS as Collab WS Server
-    participant Store as Cache + DB
+    participant Store as Cache and DB
     actor B as User B
 
-    Note over A: types "h" -> TipTap -> Yjs update (binary, tens of bytes)
+    Note over A: keystroke becomes a Yjs update (binary)
     A->>WS: sync update over WS
     WS->>WS: apply to server Y.Doc
     WS->>Store: write to cache; debounce DB flush (default 5s)
-    WS-->>B: broadcast update to other conns (excl. sender)
-    Note over B: provider applies to local Y.Doc -> TipTap re-renders
+    WS-->>B: broadcast update to other clients
+    Note over B: provider applies update, TipTap re-renders
     Note over A,B: P95 round trip well under 500ms
 ```
 
