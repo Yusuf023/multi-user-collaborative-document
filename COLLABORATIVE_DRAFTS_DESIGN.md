@@ -20,9 +20,9 @@ This document covers retrofitting that page so that drafts become **multi-user, 
 | ------ | ---------- | -------- | ----- |
 | Communications page (To/Cc/Subject/Body UI) | ✅ | ✅ | Replace single-user editor wiring with collaborative wiring |
 | TipTap editor instance | ✅ | ✅ | Add `Collaboration` + `CollaborationCaret` extensions |
-| Auth (external auth service issues JWT) | ✅ | ✅ | Verify JWT in our service; build our own RBAC table |
+| Auth (external auth service) | ✅ | ✅ | Validate tokens by calling the auth service; build our own RBAC table |
 | Email send (SMTP) | ✅ | ✅ | Reuse for invitation emails |
-| In-app notifications | ❌ | — | Build (see §12) |
+| In-app notifications | ❌ | — | Integrate the external Push Notification Service (see §12) |
 | Backend collaboration service | ❌ | — | Build (this doc) |
 
 ### 1.3 In scope / out of scope
@@ -74,7 +74,7 @@ This document covers retrofitting that page so that drafts become **multi-user, 
 
 ### 2.4 Assumptions (to confirm with lead)
 
-- The external auth service issues a **JWT** that we can verify with a public key or JWKS endpoint, containing at minimum a stable user identifier (email) and display name. *If the auth service uses opaque tokens requiring introspection, the design changes only in the auth middleware — a localized swap.*
+- The backend authenticates every request by calling a **separate auth service** (passing the caller's token); the auth service returns the user's **profile** (stable id/email, display name, and other profile fields). The token format and validation endpoint are owned by that service; our auth middleware is the only place that changes if the contract evolves.
 - The host React app uses a known state-management pattern (Redux/Zustand/Context). The collab feature exposes its own hooks; integration with the host store is via a thin adapter the host owns.
 - The host app already has an API client (axios/fetch wrapper) with auth-header injection. Collab REST calls go through it.
 
@@ -91,7 +91,7 @@ These need a decision from the lead before or shortly after design approval:
    Five policies presented. We recommend **Policy D: owner-first, fall through to first online editor**.
 
 3. **Auth contract.**
-   JWT vs introspection — design assumes JWT.
+   Confirm the auth service's validation contract (endpoint + request/response shape, profile fields returned) the backend will call, plus expected latency so we can cache the profile per connection.
 
 4. **Who can press Send?**
    Owner only, or `editor`+ ?
@@ -109,69 +109,37 @@ These need a decision from the lead before or shortly after design approval:
 
 ## 4. Architecture Overview
 
-```text
-            ┌──────────────────────────────────────────────────────┐
-            │                  Host React App                      │
-            │  (existing Communications page + collab feature)     │
-            │                                                      │
-            │   ┌──────────────────────────────────────────────┐   │
-            │   │  TipTap editor                               │   │
-            │   │   + Collaboration extension (Yjs)            │   │
-            │   │   + CollaborationCaret extension (awareness) │   │
-            │   └──────────────────────────────────────────────┘   │
-            │   ┌──────────────┐ ┌──────────────┐ ┌────────────┐   │
-            │   │ Collaborators│ │  Comments    │ │  Fallback  │   │
-            │   │   panel      │ │   sidebar    │ │   banner   │   │
-            │   └──────────────┘ └──────────────┘ └────────────┘   │
-            │   ┌──────────────────────────────────────────────┐   │
-            │   │  @hocuspocus/provider v3.4.3                 │   │
-            │   │  + in-app notifications client (SSE/WS)      │   │
-            │   └──────────────────────────────────────────────┘   │
-            └──────────────────┬───────────────────────────────────┘
-                               │
-                ┌──────────────┼─────────────────────────┐
-                │              │                         │
-       REST (HTTPS)    WS /collaboration       WS /notifications
-       (CRUD + auth)   (Yjs sync+awareness)    (per-user push)
-                │              │                         │
-                ▼              ▼                         ▼
-   ┌──────────────────────────────────────────────────────────┐
-   │            Collab Service (Node.js + Express)            │
-   │  ┌─────────────┐  ┌────────────────┐  ┌──────────────┐   │
-   │  │ REST API    │  │ In-house Yjs   │  │ Notification │   │
-   │  │ Controllers │─►│ WS Server      │  │ WS Endpoint  │   │
-   │  │ + Auth MW   │  │ (v3 protocol)  │  │ + in-proc bus│   │
-   │  └──────┬──────┘  └───────┬────────┘  └──────┬───────┘   │
-   │      counter bump after mutation commit                  │
-   │         │                 │                  │           │
-   │  ┌──────┴─────────────────┴──────────────────┴───────┐   │
-   │  │  Services: AuthVerifier, RBAC, Cache,             │   │
-   │  │            Persistence, AuditLog, Mailer (SMTP),  │   │
-   │  │            NotificationStore                      │   │
-   │  └────────────────────────────────────────────────────┘  │
-   └────────────┬─────────────────┬───────────────┬───────────┘
-                │                 │               │
-                ▼                 ▼               ▼
-        ┌──────────────────┐  ┌──────────────┐  ┌──────────┐
-        │   Postgres       │  │ In-mem Map + │  │   SMTP   │
-        │  (durable)       │  │ Volume mount │  │  relay   │
-        │  drafts (incl.   │  │  (cache)     │  │          │
-        │   to/cc/subject) │  │              │  │          │
-        │  collaborators   │  │  Y.Doc per   │  │          │
-        │  comments+replies│  │  active draft│  │          │
-        │  draft_snapshots │  │              │  │          │
-        │  draft_audit_log │  │              │  │          │
-        │  notifications   │  │              │  │          │
-        └──────────────────┘  └──────────────┘  └──────────┘
-                ▲
-                │ JWT verification (JWKS public keys cached)
-        ┌──────────────┐
-        │ External Auth│
-        │   Service    │
-        └──────────────┘
+```mermaid
+flowchart TB
+    subgraph Host["Host React App (Communications page + collab feature)"]
+        Editor["TipTap editor<br/>+ Collaboration (Yjs)<br/>+ CollaborationCaret (awareness)"]
+        Panels["Collaborators panel, Comments sidebar, Fallback banner"]
+        Provider["@hocuspocus/provider <br/>+ in-app notifications client"]
+    end
+
+    subgraph Service["Collab Service (Node.js + Express)"]
+        REST["REST API Controllers<br/>+ Auth middleware"]
+        WS["In-house Yjs WS Server<br/>"]
+        Svcs["Services: AuthClient, RBAC, Cache,<br/>Persistence, Mailer, Notifications"]
+        REST -->|"counter bump after mutation commit"| WS
+        REST --> Svcs
+        WS --> Svcs
+    end
+
+    Provider -->|"REST/HTTPS: CRUD + auth"| REST
+    Provider -->|"WS /collaboration: Yjs sync + awareness"| WS
+
+    Svcs --> PG[("Postgres (durable)")]
+    Svcs --> Cache["Cache (in-mem + volume)"]
+    Svcs --> SMTP["SMTP relay"]
+    Svcs --> Auth["Auth Service (external)"]
+    Svcs --> Push["Push Notification Service (external)"]
+    Push -.->|"in-app push"| Provider
 ```
 
-**Note on the internal arrow (REST → Yjs WS Server):** REST controllers handle CRUD mutations (subject/to/cc/comments/invites) and, after the DB transaction commits, call into the in-house Yjs server to bump the relevant `meta.*Version` counter. The Yjs server broadcasts that small update to all connected clients, who then re-fetch via REST. This is the "counter-driven REST mutation" pattern detailed in §8.5. The audit log row is written in the same transaction as the column update, so audit and broadcast are always in sync.
+Durable tables (Postgres): `drafts` (incl. subject/to/cc), `draft_collaborators`, `comments` / `comment_replies`, `draft_snapshots`. Identity is owned by the external **Auth Service**; in-app notification delivery is owned by the external **Push Notification Service** (see §12).
+
+**Note on the internal arrow (REST → Yjs WS Server):** REST controllers handle CRUD mutations (subject/to/cc/comments/invites) and, after the DB transaction commits, call into the in-house Yjs server to bump the relevant `meta.*Version` counter. The Yjs server broadcasts that small update to all connected clients, who then re-fetch via REST. This is the "counter-driven REST mutation" pattern detailed in §8.5.
 
 ---
 
@@ -200,7 +168,7 @@ Honest counter: two runtimes is more ops surface. We accept that in exchange for
 | Realtime client | **`@hocuspocus/provider@3.4.3`** | Already in registry; handles sync, awareness, reconnect, exponential backoff |
 | Cursors/selections | **`@tiptap/extension-collaboration-caret`** | Renders remote awareness as carets + labels |
 | Per-user color | Stable hash of email → curated palette (see §11) | Distinguishable, deterministic |
-| Notification client | Per-user WS to `/notifications`, fallback to polling `/api/notifications` every 30s | Real-time when WS available; degrades safely |
+| Notification client | Push Notification Service client/SDK (platform-provided) | Reuses existing notification infra; no bespoke WS to build |
 | Comment UI | Sidebar panel + TipTap mark for highlight anchor | Reuses existing patterns |
 
 ### 6.2 Backend
@@ -214,7 +182,7 @@ Honest counter: two runtimes is more ops surface. We accept that in exchange for
 | Validation | Zod (shared package) | Same schemas on web + server |
 | Logging | Pino | Structured JSON, fast |
 | Email | `nodemailer` over SMTP | Reuse existing SMTP infra |
-| JWT verify | `jose` (JWKS-aware) | Standard, well-audited |
+| Auth | Call the external auth service to validate tokens | Single source of truth for identity |
 | Rate limit | `express-rate-limit` | Standard |
 
 ### 6.3 Storage
@@ -246,18 +214,6 @@ drafts: {
   headersUpdatedAt: timestamptz
   createdAt: timestamptz DEFAULT now()
   updatedAt: timestamptz DEFAULT now()
-}
-
-draft_audit_log: {
-  id: uuid PK
-  draftId: uuid FK → drafts.id ON DELETE CASCADE
-  actorEmail: text NOT NULL
-  eventType: enum('subject_changed', 'to_changed', 'cc_changed',
-                  'invited', 'role_changed', 'removed',
-                  'sent', 'comment_added', ...) NOT NULL
-  payload: jsonb NOT NULL                 // { before, after } or event-specific shape
-  createdAt: timestamptz DEFAULT now()
-  INDEX (draftId, createdAt DESC)
 }
 
 draft_collaborators: {
@@ -316,26 +272,19 @@ comment_replies: {
   createdAt: timestamptz DEFAULT now()
 }
 
-notifications: {
-  id: uuid PK
-  recipientEmail: text NOT NULL
-  type: enum('draft_invite', 'comment_added', 'draft_sent', ...) NOT NULL
-  payload: jsonb NOT NULL             // { draftId, ... }
-  readAt: timestamptz                 // null = unread
-  createdAt: timestamptz DEFAULT now()
-  INDEX (recipientEmail, readAt)
-}
+// In-app notifications are owned by the external Push Notification Service
+// (storage, unread state, delivery) — see §12 — so no notifications table here.
 ```
 
 **What lives where:**
 
 | Field | Storage | Real-time strategy | Why |
-|-------|---------|---------------------|-----|
+| ------- | --------- | --------------------- | ----- |
 | Body | Yjs `default` (`Y.XmlFragment`) | Native CRDT — character-level merge over WS | Heavily edited by multiple users simultaneously; benefits from char-level conflict-free merge |
-| Subject | Postgres `drafts.subject` | REST PATCH + Yjs `meta.headersVersion` counter bump | Short single-line; rarely co-edited; last-writer-wins is fine; gives us audit "who changed the subject" for free |
+| Subject | Postgres `drafts.subject` | REST PATCH + Yjs `meta.headersVersion` counter bump | Short single-line; rarely co-edited; last-writer-wins is fine |
 | To | Postgres `drafts.to` (jsonb) | REST PATCH + counter bump | Token-style add/remove, not free text; set semantics avoid conflict entirely |
 | Cc | Postgres `drafts.cc` (jsonb) | REST PATCH + counter bump | Same as To |
-| Comments + replies | Postgres `comments` / `comment_replies` | REST mutations + Yjs `meta.commentsVersion` counter bump | Relational; benefit from non-collab views (lists, audits, notifications) |
+| Comments + replies | Postgres `comments` / `comment_replies` | REST mutations + Yjs `meta.commentsVersion` counter bump | Relational; benefit from non-collab views (lists, reporting, notifications) |
 | Collaborators / RBAC | Postgres `draft_collaborators` | REST | Authorization-critical; needs server enforcement |
 
 **The Yjs doc therefore contains only:**
@@ -348,8 +297,7 @@ notifications: {
 
 1. **DB schema reuse.** The existing communications/drafts table already stores subject/to/cc as columns. Keeping them there avoids dual-source-of-truth and lets non-collab views (list pages, send pipeline, search) read without touching Yjs.
 2. **Low edit frequency.** These fields are edited rarely compared to the body; the small UI lag from "REST PATCH → version bump → other clients refetch" (~100-300ms) is invisible in practice.
-3. **Audit for free.** Every header mutation goes through a controller; the controller writes a `draft_audit_log` row in the same transaction as the column update. Yjs-native fields would require parsing CRDT update streams to reconstruct authorship — much harder.
-4. **No CRDT merge complexity.** For discrete set-style fields (to/cc) and a single-line string (subject), last-writer-wins via PATCH is semantically correct and simpler than modeling them as `Y.Array` / `Y.Text`.
+3. **No CRDT merge complexity.** For discrete set-style fields (to/cc) and a single-line string (subject), last-writer-wins via PATCH is semantically correct and simpler than modeling them as `Y.Array` / `Y.Text`.
 
 **Trade-off accepted:** subject loses character-level live editing (no seeing other users type a letter at a time). Mitigation: PATCH the subject on blur, or debounce while typing (250ms). For email subjects this is the right trade.
 
@@ -359,91 +307,80 @@ notifications: {
 
 ### 8.1 Create draft and invite
 
-```text
-User A (owner)              Collab REST                Postgres            Notification svc      User B
-     │                            │                         │                      │                │
-     │  POST /api/drafts          │                         │                      │                │
-     │  (verify JWT)              │                         │                      │                │
-     ├───────────────────────────►│                         │                      │                │
-     │                            │  INSERT drafts          │                      │                │
-     │                            │  INSERT draft_collab    │                      │                │
-     │                            │   (owner)               │                      │                │
-     │                            ├────────────────────────►│                      │                │
-     │  201 { draftId }           │                         │                      │                │
-     │◄───────────────────────────┤                         │                      │                │
-     │                                                                                              │
-     │  POST /api/drafts/:id/invite { emails, role }                                                │
-     ├───────────────────────────►│                         │                      │                │
-     │                            │  INSERT draft_collab    │                      │                │
-     │                            │  INSERT draft_invite    │                      │                │
-     │                            │  INSERT notifications   │                      │                │
-     │                            ├────────────────────────►│                      │                │
-     │                            │  emit "notify:User B"   │                      │                │
-     │                            ├──────────────────────────────────────────────►│                │
-     │                            │  send SMTP invitation email                    │                │
-     │                            ├───────────────────────────────────────► (mailer)                │
-     │                            │                                                ├───── push ────►│
-     │  202 OK                    │                                                                 │
-     │◄───────────────────────────┤                                                                 │
+```mermaid
+sequenceDiagram
+    actor A as User A (owner)
+    participant REST as Collab REST
+    participant Auth as Auth Service
+    participant DB as Postgres
+    participant Push as Push Notification Service
+    participant Mail as Mailer (SMTP)
+    actor B as User B
+
+    A->>REST: POST /api/drafts
+    REST->>Auth: validate caller token
+    Auth-->>REST: user profile
+    REST->>DB: INSERT drafts + draft_collaborators (owner)
+    REST-->>A: 201 draftId
+
+    A->>REST: POST /api/drafts/:id/invite (emails, role)
+    REST->>Auth: validate caller token
+    Auth-->>REST: ok
+    REST->>DB: INSERT collaborator, invitation
+    REST->>Push: send invite notification
+    REST->>Mail: send SMTP invitation email
+    Push-->>B: in-app push
+    Mail-->>B: invitation email
+    REST-->>A: 202 OK
 ```
 
 ### 8.2 User B opens the draft
 
-```text
-User B                  Collab REST           Postgres    Cache     Collab WS Server
-   │                         │                   │           │             │
-   │  GET /communications/   │                   │           │             │
-   │       draft/:id         │                   │           │             │
-   │  (verify JWT, RBAC)     │                   │           │             │
-   ├────────────────────────►│                   │           │             │
-   │                         │  SELECT draft +   │           │             │
-   │                         │  collaborator row │           │             │
-   │                         ├──────────────────►│           │             │
-   │                         │  authorize: role  │           │             │
-   │  200 { draft meta,      │  ∈ {owner,editor, │           │             │
-   │        role, color }    │     reviewer,     │           │             │
-   │                         │     viewer}       │           │             │
-   │◄────────────────────────┤                   │           │             │
-   │                                                                       │
-   │  WS upgrade /collaboration?documentName=:id                            │
-   │  auth message: { token: "JWT" }                                       │
-   ├──────────────────────────────────────────────────────────────────────►│
-   │                                                       Y.Doc loaded?   │
-   │                                                       ├── yes ────────┤
-   │                                                       └── no: get from cache (memory→volume)
-   │                                                            └── miss: SELECT draft_snapshots
-   │                                                       Y.Doc registered, snapshot applied
-   │   ◄── sync step 1/2 (binary protocol) ─────────────────────────────►  │
-   │   ◄── awareness initial state ──────────────────────────────────────  │
-   │                                                                       │
-   │   (editor visible <2s after page nav)                                 │
+```mermaid
+sequenceDiagram
+    actor B as User B
+    participant REST as Collab REST
+    participant Auth as Auth Service
+    participant DB as Postgres
+    participant Cache
+    participant WS as Collab WS Server
+
+    B->>REST: GET /api/drafts/:id
+    REST->>Auth: validate caller token
+    Auth-->>REST: user profile
+    REST->>DB: SELECT draft + collaborator row
+    Note over REST: authorize role in owner, editor, reviewer, viewer
+    REST-->>B: 200 draft meta, role, color
+
+    B->>WS: WS upgrade /collaboration?documentName=:id
+    B->>WS: auth message (token)
+    WS->>Auth: validate token
+    Auth-->>WS: user profile
+    WS->>Cache: load Y.Doc from cache
+    Cache-->>WS: hit, or miss
+    WS->>DB: on miss, load latest snapshot
+    Note over WS: Y.Doc registered, snapshot applied
+    WS-->>B: sync step 1/2 (binary protocol)
+    WS-->>B: awareness initial state
+    Note over B: editor visible < 2s after page nav
 ```
 
 ### 8.3 Live edit propagation
 
-```text
-User A types "h"                                                          User B
-   │                                                                         │
-   │ TipTap → Yjs transaction → encoded update (binary, ~tens of bytes)      │
-   │                                                                         │
-   │ provider emits sync update over WS  ──────►  Collab WS Server           │
-   │                                                  │                      │
-   │                                                  │ apply to server Y.Doc│
-   │                                                  │ write to in-mem +    │
-   │                                                  │  volume mount file   │
-   │                                                  │ debounce DB flush    │
-   │                                                  │  (default 5s)        │
-   │                                                  │                      │
-   │                                                  │ broadcast update     │
-   │                                                  │  to all other WS     │
-   │                                                  │  conns for this doc  │
-   │                                                  └─── (excl. sender)──►│
-   │                                                                         │
-   │                                                       provider applies  │
-   │                                                       to local Y.Doc    │
-   │                                                       TipTap re-renders │
-   │                                                                         │
-   │  P95 round trip: well under 500ms                                       │
+```mermaid
+sequenceDiagram
+    actor A as User A
+    participant WS as Collab WS Server
+    participant Store as Cache + DB
+    actor B as User B
+
+    Note over A: types "h" -> TipTap -> Yjs update (binary, tens of bytes)
+    A->>WS: sync update over WS
+    WS->>WS: apply to server Y.Doc
+    WS->>Store: write to cache; debounce DB flush (default 5s)
+    WS-->>B: broadcast update to other conns (excl. sender)
+    Note over B: provider applies to local Y.Doc -> TipTap re-renders
+    Note over A,B: P95 round trip well under 500ms
 ```
 
 ### 8.4 Awareness (cursors, selections, presence)
@@ -464,7 +401,7 @@ A unified pattern is used for any data that lives in Postgres but needs real-tim
 **The pattern:**
 
 1. Client issues REST mutation (`POST /api/comments`, `PATCH /api/drafts/:id/subject`, etc.).
-2. Server validates, authorizes, writes to Postgres in a transaction. **Same transaction also writes a `draft_audit_log` row.**
+2. Server validates, authorizes, writes to Postgres.
 3. After commit, server bumps the relevant version counter in the in-memory `Y.Doc` (`meta.commentsVersion += 1` or `meta.headersVersion += 1`).
 4. Yjs broadcasts that small update to all connected clients over WS.
 5. Each client observes the counter change and re-fetches via REST.
@@ -475,67 +412,42 @@ In the POC, the client did the bump after the REST call returned. That left a ra
 
 **Concrete sequence — subject change** (comments and to/cc are mechanically identical, just a different endpoint and counter):
 
-```text
-Client A           REST              Postgres                 Server (Y.Doc)         Other clients
-   │                 │                   │                          │                       │
-   │ PATCH /api/drafts/:id/subject       │                          │                       │
-   │ { subject: "Q4 update" }            │                          │                       │
-   ├────────────────►│                   │                          │                       │
-   │                 │ BEGIN             │                          │                       │
-   │                 │ UPDATE drafts     │                          │                       │
-   │                 │   SET subject=..., headersUpdatedBy=...,     │                       │
-   │                 │       headersUpdatedAt=now()                 │                       │
-   │                 │ INSERT draft_audit_log                       │                       │
-   │                 │   (eventType='subject_changed',              │                       │
-   │                 │    payload={before, after}, actor)           │                       │
-   │                 │ COMMIT            │                          │                       │
-   │                 ├──────────────────►│                          │                       │
-   │ 200 OK          │                   │                          │                       │
-   │◄────────────────┤                   │                          │                       │
-   │                 │ meta.headersVersion += 1                     │                       │
-   │                 ├──────────────────────────────────────────────►│                       │
-   │                 │                                              │ broadcast Yjs update  │
-   │                 │                                              ├───────────────────────►│
-   │                 │                                              │                       │ observe → GET /api/drafts/:id
-   │                 │                  ◄── GET /api/drafts/:id ──────────────────────────────┤
-   │                 │                                                                       │
+```mermaid
+sequenceDiagram
+    actor A as Client A
+    participant REST as Collab REST
+    participant DB as Postgres
+    participant WS as Server (Y.Doc)
+    actor O as Other clients
+
+    A->>REST: PATCH /api/drafts/:id/subject (subject)
+    REST->>DB: UPDATE drafts (subject, headersUpdatedBy/At)
+    REST-->>A: 200 OK
+    REST->>WS: meta.headersVersion += 1
+    WS-->>O: broadcast Yjs update
+    O->>REST: observe -> GET /api/drafts/:id
+    REST-->>O: updated headers
 ```
 
 **Endpoint shapes:**
 
 - `PATCH /api/drafts/:id/subject` — body `{ subject: string }` — last-writer-wins
 - `PATCH /api/drafts/:id/to` and `/cc` — body `{ add?: EmailEntry[], remove?: EmailEntry[] }` — set semantics so concurrent add+remove don't trample each other
-- `POST /api/comments`, `POST /api/comments/reply`, `PATCH /api/comments/resolve` — as in the POC, now with audit log writes
-
-**Audit log surface area:** the same `draft_audit_log` table also captures invitations, role changes, sends, etc. — see §7 and the open question on audit retention in §17.
+- `POST /api/comments`, `POST /api/comments/reply`, `PATCH /api/comments/resolve` — as in the POC
 
 ### 8.6 Auto-save & persistence layering
 
 Three tiers, two write paths:
 
-```text
-                  Edit happens
-                       │
-                       ▼
-   ┌─────────────────────────────────────────────┐
-   │  In-process Y.Doc                           │  ← every edit, instantly
-   └────────────────┬────────────────────────────┘
-                    │ (on every Yjs update event)
-                    ▼
-   ┌─────────────────────────────────────────────┐
-   │  Volume mount: /cache/drafts/:id.ybin       │  ← atomic write (tmp+rename)
-   │  contains full Y.encodeStateAsUpdate(doc)   │
-   └────────────────┬────────────────────────────┘
-                    │ (debounced, default 5s)
-                    ▼
-   ┌─────────────────────────────────────────────┐
-   │  Postgres draft_snapshots                   │  ← upserted, one row per draft
-   └─────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    E([Edit happens]) --> C["Cache<br/>(updated on every edit)"]
+    C -->|debounced, default 5s| P[("Postgres draft_snapshots")]
 ```
 
-- Volume-mount write is **synchronous on every edit**. It's a small file write to local disk (~milliseconds); no debounce.
+- Cache write is **synchronous on every edit** (fast; no debounce).
 - DB flush is **debounced**; clears on shutdown via graceful flush handler.
-- On startup / first client connection: load Y.Doc state by trying in-mem → volume → DB, in that order, with cache promotion on hits.
+- On startup / first client connection: load Y.Doc state from cache, falling back to the latest DB snapshot.
 
 ### 8.7 Reconnect & recovery
 
@@ -557,15 +469,15 @@ Provider handles reconnect with exponential backoff automatically. Server-side b
 - Server: validates draft is not already finalized, reads current Yjs state to extract subject/to/cc/body, hands off to existing email-send pipeline.
 - On success: `UPDATE drafts SET finalized=true, finalizedAt=now()`.
 - WS connections for this draft are notified; all clients enter read-only.
-- Notification (`type: 'draft_sent'`) created for all collaborators.
+- Notify all collaborators (`draft_sent`) via the Push Notification Service.
 
 ### 8.9 In-app notifications
 
-See §12 for the full subsystem. From the user's perspective:
+Delivered by the external **Push Notification Service** (see §12). From the user's perspective:
 
-- Bell icon in the host app's chrome shows unread count, polled or pushed.
+- Bell icon in the host app's chrome shows the unread count.
 - Click → list of recent notifications with deep links.
-- When a notification arrives via WS while the page is open, badge updates immediately.
+- New notifications update the badge in real time via the notification service's client.
 
 ### 8.10 Single-user fallback (5 policies + recommendation)
 
@@ -585,70 +497,37 @@ See §12 for the full subsystem. From the user's perspective:
 
 **Implementation of Policy D:**
 
-```text
-Client detects WS unreachable (3 failed reconnects)
-         │
-         ▼
-Banner shown: "Real-time collaboration unavailable. Attempting fallback…"
-         │
-         ▼
-Client POST /api/drafts/:id/acquire-lock
-         │
-         ▼
-Server logic:
-  - Look up draft_locks row for draftId
-  - If existing lock is unexpired AND held by someone else:
-       → 409 Conflict { holderEmail, expiresAt }
-  - Else if requester is owner:
-       → INSERT/UPDATE lock, return 200 OK
-  - Else if requester is editor:
-       → if owner has tried to acquire within last 2s (grace window): 409
-       → else INSERT/UPDATE lock with shorter TTL, return 200 OK
-  - Else (reviewer/viewer):
-       → 403 Forbidden
-         │
-         ▼
-On 200: client switches to "single-user mode":
-  - Editor still editable (no Yjs propagation)
-  - Edits saved via REST PATCH every 5s (or on blur)
-  - Lock heartbeat every 30s (extends TTL)
-  - Banner updated: "Editing solo — others see read-only"
-         │
-On 409: client switches to read-only with banner:
-  - "Currently being edited by <holderEmail>. Read-only mode."
-  - Polls /api/drafts/:id/lock-status every 15s
-         │
-On WS recovery:
-  - Client releases lock (DELETE /lock)
-  - Provider reconnects, syncs local single-user changes into Y.Doc
-  - Server applies; broadcasts to others' read-only views (which now re-enable)
+```mermaid
+flowchart TD
+    D([Client detects WS unreachable<br/>3 failed reconnects]) --> Banner["Banner: Real-time collaboration<br/>unavailable. Attempting fallback"]
+    Banner --> Acq["POST /api/drafts/:id/acquire-lock"]
+    Acq --> Held{"Unexpired lock held<br/>by someone else?"}
+    Held -->|Yes| Conflict["409 Conflict<br/>(holderEmail, expiresAt)"]
+    Held -->|No| Role{"Requester role?"}
+    Role -->|Owner| Grant["INSERT/UPDATE lock -> 200 OK"]
+    Role -->|Editor| Grace{"Owner tried within<br/>last 2s grace window?"}
+    Grace -->|Yes| Conflict
+    Grace -->|No| Grant
+    Role -->|Reviewer / Viewer| Forbid["403 Forbidden"]
+    Grant --> Single["Single-user mode:<br/>editable (no Yjs propagation)<br/>REST PATCH every 5s / on blur<br/>lock heartbeat every 30s"]
+    Conflict --> RO["Read-only mode:<br/>'Being edited by holder'<br/>poll lock-status every 15s"]
+    Single --> Recover(["On WS recovery: release lock,<br/>reconnect, sync local changes into Y.Doc,<br/>others' read-only views re-enable"])
+    RO --> Recover
 ```
 
 **Merge consideration on recovery:** the single-user mode edits are plain content changes. When WS recovers, the client constructs a Yjs delta from "last known synced state" → "current local state" and applies it. Because the holder was the only writer during outage, no conflicts.
 
 ### 8.11 Notification delivery flow
 
-```text
-Trigger (e.g., invite created)
-         │
-         ▼
-NotificationStore.create(recipientEmail, type, payload)
-  - INSERT notifications
-  - emit on in-process EventEmitter: "user:<email>"
-         │
-         ▼
-NotificationGateway (per-user WS endpoint)
-  - Maintains Map<email, Set<WebSocket>> of connected users
-  - On "user:<email>" event, push to all open sockets for that user
-         │
-         ▼
-Client receives WS push → updates bell badge, optional toast
-         │
-         ▼
-(Parallel) MailerService.sendInvitation(...) via SMTP if applicable
+```mermaid
+flowchart TD
+    T([Trigger, e.g. invite created]) --> REST[Collab backend]
+    REST --> Push["Push Notification Service<br/>(separate integration)"]
+    Push --> Client["Client: in-app notification<br/>(bell badge + toast)"]
+    REST -. parallel .-> Mail["Mailer (SMTP), if applicable"]
 ```
 
-For users not currently connected: the notification is in the DB; on next page load, GET `/api/notifications?unread=true` returns it.
+Offline recipients are handled by the Push Notification Service (it stores unread notifications and surfaces them on next login) — the collab backend just emits the event.
 
 ---
 
@@ -665,8 +544,8 @@ For users not currently connected: the notification is in the DB; on next page l
 
 **Enforcement points:**
 
-1. **REST middleware** — every mutating endpoint runs `authenticate` (JWT) then `authorize(draftId, requiredRole)` (RBAC).
-2. **WS auth handshake** — connection request includes JWT; server verifies, looks up collaborator row, attaches `{ email, role, color }` to connection context.
+1. **REST middleware** — every mutating endpoint runs `authenticate` (validate token via the auth service) then `authorize(draftId, requiredRole)` (RBAC).
+2. **WS auth handshake** — connection request includes the auth token; server validates it via the auth service, looks up collaborator row, attaches `{ email, role, color }` to connection context.
 3. **WS read-only enforcement** — if role ∈ {viewer, reviewer} OR draft is finalized, the connection is marked `readOnly`; inbound sync update messages are dropped server-side (the connection still receives broadcasts).
 4. **Send action** — explicit role check at the controller before invoking the existing email pipeline.
 
@@ -712,7 +591,7 @@ Read `@hocuspocus/common@3.4.3` source for ground truth. v3 protocol surface:
 1. Client opens WS with `?documentName=<draftId>`.
 2. Server accepts upgrade.
 3. Client sends `MessageType.Auth` with token payload.
-4. Server: verifies JWT (using `jose` + JWKS cache), extracts email, fetches collaborator row, decides read-only.
+4. Server: validates the token by calling the auth service, extracts email, fetches collaborator row, decides read-only.
 5. Server sends `MessageType.Auth` with success/failure.
 6. On success: server begins sync step 1 by sending its current Y.Doc state vector; sync proceeds.
 
@@ -775,11 +654,11 @@ hooks/collab/
 
 ### 11.3 Integration touch-points the host app must provide
 
-- **Auth token getter:** `() => Promise<string>` returning a valid JWT. Used by REST client and the WS provider's auth message.
+- **Auth token getter:** `() => Promise<string>` returning a valid auth token (issued by the auth service). Used by REST client and the WS provider's auth message.
 - **Current user info:** `{ email, displayName }` for awareness state.
 - **API base URL** and **WS base URL** from env config.
 - **Mount point:** the Communications page replaces its `<TipTapEditor draft={draft} />` with `<CollabDraftEditor draftId={draft.id} />`.
-- **Notification chrome:** existing app chrome should mount `<NotificationBell />` (also from this package) to consume the per-user notification WS.
+- **Notification chrome:** the host app's existing notification bell consumes the Push Notification Service; the collab feature only emits events to that service.
 
 ### 11.4 Per-user color assignment
 
@@ -789,35 +668,25 @@ hooks/collab/
 
 ---
 
-## 12. Notification Subsystem (Greenfield)
+## 12. In-App Notifications (External Push Notification Service)
 
-### 12.1 Components
+In-app notification delivery is **not built in-house** — the collab backend integrates with a **separate Push Notification Service** (the same way it integrates with the auth service and SMTP relay). This keeps the collab service focused on collaboration and reuses the platform's existing notification infrastructure (delivery, per-user fan-out, unread state, the bell UI feed).
 
-```text
-apps/server/src/notifications/
-  store.ts        // NotificationStore.create() / list() / markRead()
-  bus.ts          // In-process EventEmitter for "user:<email>" events
-  gateway.ts      // WS endpoint /notifications + per-user connection map
-  mailer.ts       // SMTP via nodemailer; templates for invite, comment-added, draft-sent
-```
+### 12.1 Responsibilities
 
-### 12.2 Delivery semantics
+| Concern | Owner |
+| --------- | ------- |
+| Trigger a notification (invite, comment, draft sent) | **Collab backend** — calls the Push Notification Service with `{ recipient, type, payload }` |
+| Real-time delivery to connected clients | **Push Notification Service** |
+| Storage + unread/read state + history | **Push Notification Service** |
+| In-app bell UI (badge, list) | **Host app**, fed by the Push Notification Service client |
+| Optional email mirror | **Collab backend** via the SMTP relay (for invites / draft-sent) |
 
-- **Always insert to DB** (durable; visible on next page load even if push missed).
-- **Push via WS if connected** (real-time).
-- **Email mirror via SMTP** for specific notification types (configurable per type; v1 just for invites + draft-sent).
-- **No deduplication** in v1 — each event creates one notification row.
+### 12.2 Integration points
 
-### 12.3 Why this design over alternatives
-
-| Alternative | Why not (for v1) |
-| ------------- | ------------------ |
-| Polling only | Misses the real-time requirement; bell wouldn't update without page reload |
-| SSE instead of WS | Acceptable but adds a third connection type to the frontend; WS reuses an idiom already present |
-| Redis pub/sub | Redis isn't available; in-process EventEmitter works because v1 is single-replica |
-| Reuse the collab WS connection | Couples two unrelated concerns; user might be in notifications but not in any draft |
-
-When Redis arrives and we go multi-replica, swap `bus.ts` from EventEmitter to Redis pub/sub. The rest stays unchanged.
+- A thin `Notifications` service in the collab backend wraps the Push Notification Service client; controllers call it after the relevant DB mutation commits (e.g. invite created).
+- The host app already renders the platform notification bell; we only emit events to the service — no per-user WebSocket, store, or `/api/notifications` endpoint to build here.
+- Contract to confirm with the platform team: the service's "send notification" API shape and the client/SDK the host app uses to subscribe.
 
 ---
 
@@ -901,7 +770,7 @@ Each of those triggers requires Redis (for shared cache + pub/sub) and either st
 | DB unavailable | Edits keep flowing through WS; flushes queue and retry; clients see no impact short-term | Alert; queue drains when DB recovers |
 | Server pod crash | Active clients see WS drop; provider reconnects with exp backoff | State recovered from cache (memory was lost; volume survives) or DB; clients re-sync local state |
 | Volume wiped on pod replacement | Falls back to DB snapshot; ≤5s of edits may be lost since last flush, but clients re-sync their local state on reconnect → no actual loss | Reconnect path handles automatically |
-| External auth service down | JWT verification fails on new connections; existing sessions unaffected if token is still valid | Surface 503 on new connects; degrade gracefully |
+| External auth service down | Token validation calls fail on new connections; existing WS sessions unaffected | Surface 503 on new connects; degrade gracefully |
 | SMTP relay down | Invitation email send fails; in-app notification still works | Retry queue (out of scope for v1?); confirm with lead |
 | Provider/server protocol skew | Pin provider to 3.4.3; contract test suite drives real provider against server in CI | Caught at PR time, not in prod |
 
@@ -929,7 +798,6 @@ Each of those triggers requires Redis (for shared cache + pub/sub) and either st
 - **Lock TTL & abandonment recovery for fallback policy D** — if a lock holder crashes mid-edit during outage, the TTL releases the lock; next claimant inherits the draft as-of-last-saved-state, with up to 5s of lost edits.
 - **Send permission scope** — owner-only vs editor+.
 - **Rate limits per draft** (cap edits/sec, awareness/sec) to protect against runaway clients.
-- **Audit log retention & UI** — `draft_audit_log` will grow unbounded. Define retention (e.g., 90 days hot, archive thereafter) and whether to expose a per-draft activity view in the UI. Body-content edits are intentionally NOT audited per-keystroke (would be enormous and meaningless) — only "last edited by" derived from awareness/sync metadata. Confirm with lead whether richer body-edit audit is needed.
 
 ---
 
