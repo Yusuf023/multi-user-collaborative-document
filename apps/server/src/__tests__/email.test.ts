@@ -1,19 +1,21 @@
 import { describe, expect, it, vi } from "vitest"
 
-const mockSend = vi.hoisted(() => vi.fn().mockResolvedValue({ id: "email-id" }))
+const mockSend = vi.hoisted(() => vi.fn().mockResolvedValue({ messageId: "email-id" }))
 
-vi.mock("resend", () => ({
-  Resend: class {
-    emails = { send: mockSend }
-  }
+vi.mock("nodemailer", () => ({
+  default: { createTransport: () => ({ sendMail: mockSend }) }
 }))
 
 vi.mock("../env", () => ({
   env: {
     NODE_ENV: "test",
     LOG_LEVEL: "silent",
-    RESEND_API_KEY: "test-key",
-    RESEND_FROM_EMAIL: "noreply@example.com",
+    SMTP_HOST: "smtp.test.local",
+    SMTP_PORT: 587,
+    SMTP_SECURE: false,
+    SMTP_USER: "user",
+    SMTP_PASS: "pass",
+    MAIL_FROM: "noreply@example.com",
     FRONTEND_URL: "http://localhost:3000"
   }
 }))

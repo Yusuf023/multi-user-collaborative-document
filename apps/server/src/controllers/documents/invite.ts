@@ -56,10 +56,10 @@ export async function inviteUsers(req: Request, res: Response) {
 
       newCollaborators.push(created)
     } catch (err: unknown) {
-      // Handle unique constraint violation (concurrent invite)
-      // Postgres error code 23505 = unique_violation
-      const pgCode = (err as { code?: string }).code
-      if (pgCode === "23505") {
+      // Skip on unique constraint violation (concurrent invite of same email).
+      // better-sqlite3 raises SQLITE_CONSTRAINT_UNIQUE / SQLITE_CONSTRAINT_PRIMARYKEY.
+      const code = (err as { code?: string }).code
+      if (code?.startsWith("SQLITE_CONSTRAINT")) {
         continue
       }
       throw err

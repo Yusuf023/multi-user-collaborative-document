@@ -3,8 +3,8 @@
 import type { Collaborator, InvitableRole } from "@collab/shared"
 import { INVITABLE_ROLES } from "@collab/shared"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Plus, Share2, Trash2 } from "lucide-react"
-import { useState } from "react"
+import { Check, Copy, Plus, Share2, Trash2 } from "lucide-react"
+import { useEffect, useState } from "react"
 import { useFieldArray, useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod/v4"
@@ -23,6 +23,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Switch } from "@/components/ui/switch"
 import { apiPost, authHeaders } from "@/lib/api-client"
 import { API_ROUTES } from "@/lib/api-routes"
+
+// Remembers the user's "send invite email" choice across sessions.
+const SEND_EMAIL_STORAGE_KEY = "collab:invite:sendEmail"
 
 const inviteFormSchema = z.object({
   invites: z
@@ -56,13 +59,49 @@ interface InviteDialogProps {
   onInvited: (collaborators: Collaborator[]) => void
 }
 
+interface InviteLink {
+  email: string
+  url: string
+}
+
 const emptyInvites = (): InviteFormData => ({
   invites: [{ email: "", role: "editor" }],
   sendEmail: true
 })
 
+function buildInviteUrl(documentId: string, email: string, token: string): string {
+  return `${window.location.origin}/${documentId}?email=${encodeURIComponent(email)}&token=${token}`
+}
+
+function CopyLinkRow({ email, url }: InviteLink) {
+  const [copied, setCopied] = useState(false)
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      toast.error("Could not copy to clipboard")
+    }
+  }
+
+  return (
+    <div className="space-y-1 rounded-md border p-3">
+      <p className="text-sm font-medium">{email}</p>
+      <div className="flex items-center gap-2">
+        <Input readOnly value={url} className="flex-1 text-xs" onFocus={(e) => e.target.select()} />
+        <Button type="button" variant="outline" size="icon" className="shrink-0" onClick={copy}>
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export function InviteDialog({ documentId, token, currentUser, onInvited }: InviteDialogProps) {
   const [open, setOpen] = useState(false)
+  const [invitedLinks, setInvitedLinks] = useState<InviteLink[] | null>(null)
 
   const {
     register,
@@ -80,10 +119,30 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
   const { fields, append, remove } = useFieldArray({ control, name: "invites" })
   const sendEmail = watch("sendEmail")
 
+  // Load the persisted send-email preference once on mount (localStorage is
+  // client-only, so we read it in an effect rather than in defaultValues).
+  useEffect(() => {
+    const saved = localStorage.getItem(SEND_EMAIL_STORAGE_KEY)
+    if (saved !== null) setValue("sendEmail", saved === "true")
+  }, [setValue])
+
+  const setSendEmail = (checked: boolean) => {
+    setValue("sendEmail", checked)
+    localStorage.setItem(SEND_EMAIL_STORAGE_KEY, String(checked))
+  }
+
   const handleOpenChange = (next: boolean) => {
     setOpen(next)
-    // Reset form whenever dialog closes so the next open is fresh
-    if (!next) reset(emptyInvites())
+    // Reset form + results whenever dialog closes so the next open is fresh
+    if (!next) {
+      reset(emptyInvites())
+      setInvitedLinks(null)
+    }
+  }
+
+  const startOver = () => {
+    reset(emptyInvites())
+    setInvitedLinks(null)
   }
 
   const onSubmit = async (data: InviteFormData) => {
@@ -96,9 +155,15 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
       )
       if (result) {
         onInvited(result.collaborators as Collaborator[])
-        toast.success("Invitations sent successfully")
-        reset(emptyInvites())
-        setOpen(false)
+        toast.success(data.sendEmail ? "Invitations sent" : "Invite links created")
+        // Show copyable links for everyone we just invited, then let the user
+        // close or invite more. Links work whether or not the email was sent.
+        setInvitedLinks(
+          data.invites.map((i) => ({
+            email: i.email,
+            url: buildInviteUrl(documentId, i.email, token)
+          }))
+        )
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send invitations")
@@ -114,85 +179,112 @@ export function InviteDialog({ documentId, token, currentUser, onInvited }: Invi
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Invite collaborators</DialogTitle>
-          <DialogDescription>Add people to collaborate on this document.</DialogDescription>
+          <DialogDescription>
+            {invitedLinks
+              ? "Share these links with your collaborators."
+              : "Add people to collaborate on this document."}
+          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-            {fields.map((field, index) => (
-              <div key={field.id} className="space-y-2 rounded-md border p-3">
-                <div className="flex items-start gap-2">
-                  <div className="flex-1 space-y-1">
-                    <Input
-                      placeholder="email@example.com"
-                      {...register(`invites.${index}.email`)}
-                    />
-                    {errors.invites?.[index]?.email && (
-                      <p className="text-xs text-destructive">
-                        {errors.invites[index].email.message}
-                      </p>
+
+        {invitedLinks ? (
+          <div className="space-y-4">
+            <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+              {invitedLinks.map((link) => (
+                <CopyLinkRow key={link.email} email={link.email} url={link.url} />
+              ))}
+            </div>
+            <div className="flex items-center justify-between border-t pt-4">
+              <Button type="button" variant="outline" size="sm" onClick={startOver}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Invite more
+              </Button>
+              <Button type="button" onClick={() => handleOpenChange(false)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+              {fields.map((field, index) => (
+                <div key={field.id} className="space-y-2 rounded-md border p-3">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 space-y-1">
+                      <Input
+                        placeholder="email@example.com"
+                        {...register(`invites.${index}.email`)}
+                      />
+                      {errors.invites?.[index]?.email && (
+                        <p className="text-xs text-destructive">
+                          {errors.invites[index].email.message}
+                        </p>
+                      )}
+                    </div>
+                    {fields.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0"
+                        onClick={() => remove(index)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     )}
                   </div>
-                  {fields.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="shrink-0"
-                      onClick={() => remove(index)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
+                  <RadioGroup
+                    value={watch(`invites.${index}.role`)}
+                    onValueChange={(val) => setValue(`invites.${index}.role`, val as InvitableRole)}
+                    className="flex gap-4"
+                  >
+                    {INVITABLE_ROLES.map((role) => (
+                      <div key={role} className="flex items-center gap-1.5">
+                        <RadioGroupItem value={role} id={`${field.id}-${role}`} />
+                        <Label
+                          htmlFor={`${field.id}-${role}`}
+                          className="text-xs capitalize cursor-pointer"
+                        >
+                          {role}
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
                 </div>
-                <RadioGroup
-                  value={watch(`invites.${index}.role`)}
-                  onValueChange={(val) => setValue(`invites.${index}.role`, val as InvitableRole)}
-                  className="flex gap-4"
-                >
-                  {INVITABLE_ROLES.map((role) => (
-                    <div key={role} className="flex items-center gap-1.5">
-                      <RadioGroupItem value={role} id={`${field.id}-${role}`} />
-                      <Label
-                        htmlFor={`${field.id}-${role}`}
-                        className="text-xs capitalize cursor-pointer"
-                      >
-                        {role}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => append({ email: "", role: "editor" })}
-            >
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Add another
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => reset(emptyInvites())}>
-              Clear
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between border-t pt-4">
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={sendEmail}
-                onCheckedChange={(checked) => setValue("sendEmail", checked)}
-              />
-              <Label className="text-sm">Send invite email</Label>
+              ))}
             </div>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Sending..." : "Send invites"}
-            </Button>
-          </div>
-        </form>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => append({ email: "", role: "editor" })}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Add another
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => reset(emptyInvites())}>
+                Clear
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between border-t pt-4">
+              <div className="flex items-center gap-2">
+                <Switch checked={sendEmail} onCheckedChange={setSendEmail} />
+                <Label className="text-sm">Send invite email</Label>
+              </div>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting
+                  ? sendEmail
+                    ? "Sending..."
+                    : "Creating..."
+                  : sendEmail
+                    ? "Send invites"
+                    : "Create links"}
+              </Button>
+            </div>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   )

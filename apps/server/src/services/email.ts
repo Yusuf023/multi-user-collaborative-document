@@ -1,11 +1,19 @@
-import { Resend } from "resend"
+import nodemailer from "nodemailer"
 import { env } from "../env"
 import { logger } from "./logger"
 
 const log = logger.child({ component: "email" })
 
-// Empty key means email sending is disabled (bare-metal demo without a Resend account).
-const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null
+// No SMTP host configured means email sending is disabled (bare-metal demo
+// without a mail relay). sendInviteEmail then just logs the would-be link.
+const transport = env.SMTP_HOST
+  ? nodemailer.createTransport({
+      host: env.SMTP_HOST,
+      port: env.SMTP_PORT,
+      secure: env.SMTP_SECURE,
+      auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined
+    })
+  : null
 
 interface InviteEmailParams {
   to: string
@@ -24,15 +32,15 @@ export async function sendInviteEmail({
 }: InviteEmailParams) {
   const documentUrl = `${env.FRONTEND_URL}/${documentId}?email=${encodeURIComponent(to)}&token=${token}`
 
-  if (!resend) {
-    log.warn({ to, documentId, documentUrl }, "RESEND_API_KEY not set — skipping invite email")
+  if (!transport) {
+    log.warn({ to, documentId, documentUrl }, "SMTP_HOST not set — skipping invite email")
     return
   }
 
-  await resend.emails.send({
-    from: env.RESEND_FROM_EMAIL,
+  await transport.sendMail({
+    from: env.MAIL_FROM,
     to,
-    subject: `You've been invited to collaborate on a document`,
+    subject: "You've been invited to collaborate on a document",
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>You've been invited to collaborate</h2>

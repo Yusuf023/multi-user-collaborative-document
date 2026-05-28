@@ -397,11 +397,11 @@ describe("documents routes", () => {
 
       mockInsert.mockReturnValue({
         values: vi.fn().mockReturnValue({
-          returning: vi
-            .fn()
-            .mockRejectedValue(
-              Object.assign(new Error("unique constraint violation"), { code: "23505" })
-            )
+          returning: vi.fn().mockRejectedValue(
+            Object.assign(new Error("unique constraint violation"), {
+              code: "SQLITE_CONSTRAINT_UNIQUE"
+            })
+          )
         })
       })
 

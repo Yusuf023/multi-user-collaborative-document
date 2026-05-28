@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import { Geist } from "next/font/google"
-import NextTopLoader from "nextjs-toploader"
 import { Toaster } from "sonner"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -19,7 +18,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-          <NextTopLoader color="var(--color-primary)" showSpinner={false} />
           <TooltipProvider>{children}</TooltipProvider>
           <Toaster
             position="bottom-right"
