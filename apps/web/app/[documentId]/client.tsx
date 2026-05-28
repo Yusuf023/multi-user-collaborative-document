@@ -16,6 +16,7 @@ import { apiGet, authHeaders } from "@/lib/api-client"
 import { API_ROUTES } from "@/lib/api-routes"
 
 const COLLABORATORS_META_KEY = "collaboratorsVersion"
+const FINALIZED_META_KEY = "finalized"
 
 interface DocumentPageClientProps {
   documentId: string
@@ -75,7 +76,9 @@ export function DocumentPageClient({ documentId, email, token }: DocumentPageCli
     }
   }, [documentId, token, currentUserEmail])
 
-  // Listen for collaborator-list changes broadcast from other clients via Yjs meta
+  // Observe Yjs meta for changes broadcast by other clients:
+  //  - collaboratorsVersion: a counter that triggers a document refetch
+  //  - finalized: a boolean that directly drives the read-only state
   useEffect(() => {
     if (!provider) return
     const meta = provider.document.getMap("meta")
@@ -86,6 +89,13 @@ export function DocumentPageClient({ documentId, email, token }: DocumentPageCli
       if (version !== lastVersion) {
         lastVersion = version
         fetchDocument()
+      }
+
+      const finalized = meta.get(FINALIZED_META_KEY)
+      if (typeof finalized === "boolean") {
+        setDocument((prev) =>
+          prev && prev.finalized !== finalized ? { ...prev, finalized } : prev
+        )
       }
     }
 
@@ -110,16 +120,13 @@ export function DocumentPageClient({ documentId, email, token }: DocumentPageCli
 
   const handleFinalizedChange = useCallback(
     (finalized: boolean) => {
-      // Optimistic local update; we always refetch shortly via the version bump
-      // so the canonical state will be re-applied from the server (incl. finalizedBy/At).
+      // Optimistic local update for this client.
       setDocument((prev) => (prev ? { ...prev, finalized } : prev))
-      notifyCollaboratorsChanged()
-      // Trigger another refetch after a short delay so we pick up the
-      // server-side finalizedBy/finalizedAt audit fields and let the closed
-      // WS connections from the server-side closeConnections reconnect.
-      setTimeout(fetchDocument, 400)
+      // Drive every other connected client instantly via a boolean in the Yjs
+      // meta map (same mechanism as the title). The observer above applies it.
+      provider?.document.getMap("meta").set(FINALIZED_META_KEY, finalized)
     },
-    [notifyCollaboratorsChanged, fetchDocument]
+    [provider]
   )
 
   if (loading) {
