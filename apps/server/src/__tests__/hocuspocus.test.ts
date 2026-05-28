@@ -15,7 +15,7 @@ vi.mock("../db", () => ({
   }
 }))
 
-vi.mock("../services/redis", () => ({
+vi.mock("../services/cache", () => ({
   getDocState: vi.fn(),
   setDocState: vi.fn()
 }))
@@ -81,7 +81,7 @@ vi.mock("@hocuspocus/extension-database", () => ({
 // Import after mocks
 await import("../hocuspocus")
 
-import { getDocState, setDocState } from "../services/redis"
+import { getDocState, setDocState } from "../services/cache"
 
 describe("hocuspocus", () => {
   beforeEach(() => {

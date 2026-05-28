@@ -13,3 +13,6 @@ coverage
 .env.*
 !.env.example
 .vscode
+
+# bare-metal demo: SQLite db + per-doc cache files
+apps/server/data

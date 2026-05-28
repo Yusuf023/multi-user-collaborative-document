@@ -1,7 +1,11 @@
 import { Resend } from "resend"
 import { env } from "../env"
+import { logger } from "./logger"
 
-const resend = new Resend(env.RESEND_API_KEY)
+const log = logger.child({ component: "email" })
+
+// Empty key means email sending is disabled (bare-metal demo without a Resend account).
+const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null
 
 interface InviteEmailParams {
   to: string
@@ -19,6 +23,11 @@ export async function sendInviteEmail({
   invitedBy
 }: InviteEmailParams) {
   const documentUrl = `${env.FRONTEND_URL}/${documentId}?email=${encodeURIComponent(to)}&token=${token}`
+
+  if (!resend) {
+    log.warn({ to, documentId, documentUrl }, "RESEND_API_KEY not set — skipping invite email")
+    return
+  }
 
   await resend.emails.send({
     from: env.RESEND_FROM_EMAIL,

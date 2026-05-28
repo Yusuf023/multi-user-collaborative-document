@@ -1,26 +1,12 @@
 {
   "version": "7",
-  "dialect": "postgresql",
+  "dialect": "sqlite",
   "entries": [
     {
       "idx": 0,
-      "version": "7",
-      "when": 1779416127338,
-      "tag": "0000_early_captain_marvel",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1779417600898,
-      "tag": "0001_smooth_cyclops",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1779420870472,
-      "tag": "0002_fair_firedrake",
+      "version": "6",
+      "when": 1779933978779,
+      "tag": "0000_absent_sasquatch",
       "breakpoints": true
     }
   ]

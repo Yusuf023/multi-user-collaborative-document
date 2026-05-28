@@ -1,59 +1,64 @@
-import { boolean, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core"
+import { randomUUID } from "node:crypto"
+import { sql } from "drizzle-orm"
+import { integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core"
 
-export const documents = pgTable("documents", {
-  id: uuid("id").primaryKey().defaultRandom(),
+const newId = () => randomUUID()
+const nowMs = sql`(unixepoch() * 1000)`
+
+export const documents = sqliteTable("documents", {
+  id: text("id").primaryKey().$defaultFn(newId),
   token: text("token").notNull(),
   title: text("title").default("Untitled Document").notNull(),
-  finalized: boolean("finalized").default(false).notNull(),
+  finalized: integer("finalized", { mode: "boolean" }).default(false).notNull(),
   finalizedBy: text("finalized_by"),
-  finalizedAt: timestamp("finalized_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+  finalizedAt: integer("finalized_at", { mode: "timestamp_ms" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs)
 })
 
-export const collaborators = pgTable(
+export const collaborators = sqliteTable(
   "collaborators",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    documentId: uuid("document_id")
+    id: text("id").primaryKey().$defaultFn(newId),
+    documentId: text("document_id")
       .references(() => documents.id, { onDelete: "cascade" })
       .notNull(),
     email: text("email").notNull(),
     role: text("role", { enum: ["owner", "editor", "reviewer", "viewer"] }).notNull(),
     color: text("color").notNull(),
-    joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull()
+    joinedAt: integer("joined_at", { mode: "timestamp_ms" }).notNull().default(nowMs)
   },
   (table) => [unique("collaborators_document_email_unique").on(table.documentId, table.email)]
 )
 
-export const comments = pgTable("comments", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  documentId: uuid("document_id")
+export const comments = sqliteTable("comments", {
+  id: text("id").primaryKey().$defaultFn(newId),
+  documentId: text("document_id")
     .references(() => documents.id, { onDelete: "cascade" })
     .notNull(),
   content: text("content").notNull(),
   quotedText: text("quoted_text").notNull(),
   authorEmail: text("author_email").notNull(),
-  resolved: boolean("resolved").default(false).notNull(),
+  resolved: integer("resolved", { mode: "boolean" }).default(false).notNull(),
   resolvedBy: text("resolved_by"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs)
 })
 
-export const commentReplies = pgTable("comment_replies", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  commentId: uuid("comment_id")
+export const commentReplies = sqliteTable("comment_replies", {
+  id: text("id").primaryKey().$defaultFn(newId),
+  commentId: text("comment_id")
     .references(() => comments.id, { onDelete: "cascade" })
     .notNull(),
   content: text("content").notNull(),
   authorEmail: text("author_email").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs)
 })
 
-export const documentSnapshots = pgTable("document_snapshots", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  documentId: uuid("document_id")
+export const documentSnapshots = sqliteTable("document_snapshots", {
+  id: text("id").primaryKey().$defaultFn(newId),
+  documentId: text("document_id")
     .references(() => documents.id, { onDelete: "cascade" })
     .notNull()
     .unique(),
-  state: text("state").notNull(), // base64 encoded Yjs state
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+  state: text("state").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs)
 })

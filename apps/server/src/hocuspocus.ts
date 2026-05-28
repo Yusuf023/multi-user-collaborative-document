@@ -4,8 +4,8 @@ import { eq } from "drizzle-orm"
 import { db } from "./db"
 import { documentSnapshots } from "./db/schema"
 import { env } from "./env"
+import { getDocState, setDocState } from "./services/cache"
 import { logger } from "./services/logger"
-import { getDocState, setDocState } from "./services/redis"
 import { getCollaborator, normalizeEmail, verifyDocumentAccess } from "./utils/auth"
 
 const log = logger.child({ component: "hocuspocus" })
@@ -100,21 +100,21 @@ export const hocuspocus = new Hocuspocus({
   extensions: [
     new Database({
       async fetch({ documentName }) {
-        // Try Redis first
-        const redisState = await getDocState(documentName)
-        if (redisState) {
-          log.debug({ documentName, source: "redis", bytes: redisState.length }, "fetch hit")
-          return new Uint8Array(redisState)
+        // Try cache first (in-memory + volume file)
+        const cached = await getDocState(documentName)
+        if (cached) {
+          log.debug({ documentName, source: "cache", bytes: cached.length }, "fetch hit")
+          return new Uint8Array(cached)
         }
 
-        // Fall back to DB
+        // Fall back to SQLite
         const snapshot = await db.query.documentSnapshots.findFirst({
           where: eq(documentSnapshots.documentId, documentName)
         })
 
         if (snapshot) {
           const buffer = Buffer.from(snapshot.state, "base64")
-          log.debug({ documentName, source: "postgres", bytes: buffer.length }, "fetch hit")
+          log.debug({ documentName, source: "sqlite", bytes: buffer.length }, "fetch hit")
           await setDocState(documentName, buffer)
           return new Uint8Array(buffer)
         }
@@ -130,7 +130,7 @@ export const hocuspocus = new Hocuspocus({
         try {
           await setDocState(documentName, buffer)
         } catch (err) {
-          log.error({ err, documentName }, "redis store failed")
+          log.error({ err, documentName }, "cache store failed")
         }
 
         debouncedDbFlush(documentName, state)
