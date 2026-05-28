@@ -377,7 +377,7 @@ sequenceDiagram
     Note over A: keystroke becomes a Yjs update (binary)
     A->>WS: sync update over WS
     WS->>WS: apply to server Y.Doc
-    WS->>Store: write to cache; debounce DB flush (default 5s)
+    WS->>Store: write to cache, debounced DB flush (default 5s)
     WS-->>B: broadcast update to other clients
     Note over B: provider applies update, TipTap re-renders
     Note over A,B: P95 round trip well under 500ms
