@@ -14,8 +14,9 @@
   },
   "dependencies": {
     "@collab/shared": "workspace:*",
-    "@hocuspocus/extension-database": "^4.1.0",
-    "@hocuspocus/server": "^4.1.0",
+    "@hocuspocus/common": "workspace:*",
+    "@hocuspocus/extension-database": "workspace:*",
+    "@hocuspocus/server": "workspace:*",
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

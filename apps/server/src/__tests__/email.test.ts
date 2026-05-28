@@ -10,6 +10,8 @@ vi.mock("resend", () => ({
 
 vi.mock("../env", () => ({
   env: {
+    NODE_ENV: "test",
+    LOG_LEVEL: "silent",
     RESEND_API_KEY: "test-key",
     RESEND_FROM_EMAIL: "noreply@example.com",
     FRONTEND_URL: "http://localhost:3000"

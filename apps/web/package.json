@@ -13,7 +13,7 @@
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@collab/shared": "workspace:*",
-    "@hocuspocus/provider": "^4.1.0",
+    "@hocuspocus/provider": "3.4.3",
     "@hookform/resolvers": "^5.4.0",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.15",

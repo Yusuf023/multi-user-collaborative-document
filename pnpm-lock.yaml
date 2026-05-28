@@ -29,12 +29,15 @@ importers:
       '@collab/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@hocuspocus/common':
+        specifier: workspace:*
+        version: link:../../packages/hocuspocus-common
       '@hocuspocus/extension-database':
-        specifier: ^4.1.0
-        version: 4.1.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)
+        specifier: workspace:*
+        version: link:../../packages/hocuspocus-extension-database
       '@hocuspocus/server':
-        specifier: ^4.1.0
-        version: 4.1.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)
+        specifier: workspace:*
+        version: link:../../packages/hocuspocus-server
       better-sqlite3:
         specifier: ^12.10.0
         version: 12.10.0
@@ -121,8 +124,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@hocuspocus/provider':
-        specifier: ^4.1.0
-        version: 4.1.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)
+        specifier: 3.4.3
+        version: 3.4.3(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)
       '@hookform/resolvers':
         specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.76.0(react@19.2.6))
@@ -271,6 +274,55 @@ importers:
       vitest:
         specifier: ^4.1.7
         version: 4.1.7(@types/node@25.9.1)(@vitest/coverage-v8@4.1.7)(jsdom@29.1.1(@noble/hashes@1.8.0))(msw@2.14.6(@types/node@25.9.1)(typescript@6.0.3))(vite@8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
+
+  packages/hocuspocus-common:
+    dependencies:
+      lib0:
+        specifier: ^0.2.87
+        version: 0.2.117
+
+  packages/hocuspocus-extension-database:
+    dependencies:
+      '@hocuspocus/server':
+        specifier: workspace:*
+        version: link:../hocuspocus-server
+      yjs:
+        specifier: ^13.6.8
+        version: 13.6.30
+
+  packages/hocuspocus-server:
+    dependencies:
+      '@hocuspocus/common':
+        specifier: workspace:*
+        version: link:../hocuspocus-common
+      async-lock:
+        specifier: ^1.3.1
+        version: 1.4.1
+      async-mutex:
+        specifier: ^0.5.0
+        version: 0.5.0
+      kleur:
+        specifier: ^4.1.4
+        version: 4.1.5
+      lib0:
+        specifier: ^0.2.47
+        version: 0.2.117
+      ws:
+        specifier: ^8.5.0
+        version: 8.21.0
+      y-protocols:
+        specifier: ^1.0.6
+        version: 1.0.7(yjs@13.6.30)
+      yjs:
+        specifier: ^13.6.8
+        version: 13.6.30
+    devDependencies:
+      '@types/async-lock':
+        specifier: ^1.1.3
+        version: 1.4.2
+      '@types/ws':
+        specifier: ^8.5.3
+        version: 8.18.1
 
   packages/shared:
     dependencies:
@@ -1064,23 +1116,11 @@ packages:
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
 
-  '@hocuspocus/common@4.1.0':
-    resolution: {integrity: sha512-SOBbu0GcBMbLo7IYRDZC6gvEcoATbEFIC5KqzvLanC6dZZLkv91pYEBli+Exs/G71ELL3iUjSwnaf+gksxcjFA==}
+  '@hocuspocus/common@3.4.4':
+    resolution: {integrity: sha512-RykIJ0tsHHMP4Xk+4UCbc7SO5LgGxGUSTdbh6anJEsaALAyqinf1Nn5HYuMjLPolAmsar1v++m9zufR09NLpXA==}
 
-  '@hocuspocus/extension-database@4.1.0':
-    resolution: {integrity: sha512-jH70FcWxIVcN++IYuSfS4JPAJgowEjFXWU/59yNlSYHEl0tWNqtR4/JBpVVAJQd1gV1kV/EXsrlnoNzV8SeCuw==}
-    peerDependencies:
-      yjs: ^13.6.8
-
-  '@hocuspocus/provider@4.1.0':
-    resolution: {integrity: sha512-K80V2yX4AMdpqgjIkexJioyI2Oq8pu8hjdFqY0INXKSpH8TQv9NMaDzJmlrZMYmUeKyRO2t7VhGyFK9jZQPnNw==}
-    peerDependencies:
-      y-protocols: ^1.0.6
-      yjs: ^13.6.8
-
-  '@hocuspocus/server@4.1.0':
-    resolution: {integrity: sha512-mp0Of76kRkK/u+9pKXPLNV4NI2Cyjql/jVnudVb0z6xAd/i7mBDTK88p1I1sNoX9yvCvhY7lQlrvVx6sMcl8Xw==}
-    engines: {node: '>=22'}
+  '@hocuspocus/provider@3.4.3':
+    resolution: {integrity: sha512-zt+UgVXGsEQrqnDZgavc2PT9yKJjmVjV+5YxvhlmFVFLVORqawT4l601aKmLPhvyK97un4ZApZ5rso8iO6crWg==}
     peerDependencies:
       y-protocols: ^1.0.6
       yjs: ^13.6.8
@@ -2311,6 +2351,9 @@ packages:
   '@types/aria-query@5.0.4':
     resolution: {integrity: sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw==}
 
+  '@types/async-lock@1.4.2':
+    resolution: {integrity: sha512-HlZ6Dcr205BmNhwkdXqrg2vkFMN2PluI7Lgr8In3B3wE5PiQHhjRqtW/lGdVU9gw+sM0JcIDx2AN+cW8oSWIcw==}
+
   '@types/better-sqlite3@7.6.13':
     resolution: {integrity: sha512-NMv9ASNARoKksWtsq/SHakpYAYnhBrQgGD8zkLYk/jaK8jUGn08CfEdTRgYhMypUQAfzSP8W6gNLe0q19/t4VA==}
 
@@ -2487,6 +2530,9 @@ packages:
 
   ast-v8-to-istanbul@1.0.0:
     resolution: {integrity: sha512-1fSfIwuDICFA4LKkCzRPO7F0hzFf0B7+Xqrl27ynQaa+Rh0e1Es0v6kWHPott3lU10AyAr7oKHa65OppjLn3Rg==}
+
+  async-lock@1.4.1:
+    resolution: {integrity: sha512-Az2ZTpuytrtqENulXwO3GGv1Bztugx6TT37NIo7imr/Qo0gsYiGtSdBa2B6fsXhTpVZDNfu1Qn3pk531e3q+nQ==}
 
   async-mutex@0.5.0:
     resolution: {integrity: sha512-1A94B18jkJ3DYq284ohPxoXbfTA5HsQ7/Mf4DEhcyLx3Bz27Rh59iScbB6EPiP+B+joue6YCxcMXSbFC1tZKwA==}
@@ -2677,14 +2723,6 @@ packages:
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
-
-  crossws@0.4.5:
-    resolution: {integrity: sha512-wUR89x/Rw7/8t+vn0CmGDYM9TD6VtARGb0LD5jq2wjtMy1vCP4M+sm6N6TigWeTYvnA8MoW29NqqXD0ep0rfBA==}
-    peerDependencies:
-      srvx: '>=0.11.5'
-    peerDependenciesMeta:
-      srvx:
-        optional: true
 
   css-tree@3.2.1:
     resolution: {integrity: sha512-X7sjQzceUhu1u7Y/ylrRZFU2FS6LRiFVp6rKLPg23y3x3c3DOKAwuXGDp+PAGjh6CSnCjYeAul8pcT8bAl+lSA==}
@@ -4599,6 +4637,18 @@ packages:
       utf-8-validate:
         optional: true
 
+  ws@8.21.0:
+    resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   wsl-utils@0.3.1:
     resolution: {integrity: sha512-g/eziiSUNBSsdDJtCLB8bdYEUMj4jR7AGeUo96p/3dTafgjHhpF4RiCFPiRILwjQoDXx5MqkBr4fwWtR3Ky4Wg==}
     engines: {node: '>=20'}
@@ -5245,37 +5295,21 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
-  '@hocuspocus/common@4.1.0':
+  '@hocuspocus/common@3.4.4':
     dependencies:
       lib0: 0.2.117
 
-  '@hocuspocus/extension-database@4.1.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)':
+  '@hocuspocus/provider@3.4.3(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)':
     dependencies:
-      '@hocuspocus/server': 4.1.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)
-      yjs: 13.6.30
-    transitivePeerDependencies:
-      - srvx
-      - y-protocols
-
-  '@hocuspocus/provider@4.1.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)':
-    dependencies:
-      '@hocuspocus/common': 4.1.0
+      '@hocuspocus/common': 3.4.4
       '@lifeomic/attempt': 3.1.0
       lib0: 0.2.117
-      y-protocols: 1.0.7(yjs@13.6.30)
-      yjs: 13.6.30
-
-  '@hocuspocus/server@4.1.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)':
-    dependencies:
-      '@hocuspocus/common': 4.1.0
-      async-mutex: 0.5.0
-      crossws: 0.4.5
-      kleur: 4.1.5
-      lib0: 0.2.117
+      ws: 8.21.0
       y-protocols: 1.0.7(yjs@13.6.30)
       yjs: 13.6.30
     transitivePeerDependencies:
-      - srvx
+      - bufferutil
+      - utf-8-validate
 
   '@hono/node-server@1.19.14(hono@4.12.21)':
     dependencies:
@@ -6330,6 +6364,8 @@ snapshots:
 
   '@types/aria-query@5.0.4': {}
 
+  '@types/async-lock@1.4.2': {}
+
   '@types/better-sqlite3@7.6.13':
     dependencies:
       '@types/node': 25.9.1
@@ -6532,6 +6568,8 @@ snapshots:
       estree-walker: 3.0.3
       js-tokens: 10.0.0
 
+  async-lock@1.4.1: {}
+
   async-mutex@0.5.0:
     dependencies:
       tslib: 2.8.1
@@ -6711,8 +6749,6 @@ snapshots:
       path-key: 3.1.1
       shebang-command: 2.0.0
       which: 2.0.2
-
-  crossws@0.4.5: {}
 
   css-tree@3.2.1:
     dependencies:
@@ -8555,6 +8591,8 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@7.5.10: {}
+
+  ws@8.21.0: {}
 
   wsl-utils@0.3.1:
     dependencies:
