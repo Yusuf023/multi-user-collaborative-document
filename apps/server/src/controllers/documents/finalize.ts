@@ -2,11 +2,7 @@ import { eq } from "drizzle-orm"
 import type { Request, Response } from "express"
 import { db } from "../../db"
 import { documents } from "../../db/schema"
-import { hocuspocus } from "../../hocuspocus"
 import type { AuthenticatedRequest } from "../../middleware/authenticate"
-import { logger } from "../../services/logger"
-
-const log = logger.child({ component: "finalize" })
 
 export async function finalizeDocument(req: Request, res: Response) {
   const {
@@ -40,15 +36,9 @@ export async function finalizeDocument(req: Request, res: Response) {
     return
   }
 
-  // Force-close existing WS connections so they re-authenticate with the new
-  // readOnly state. New connections from the same clients will use the updated
-  // `finalized` flag from the DB.
-  try {
-    hocuspocus.closeConnections(documentId)
-  } catch (err) {
-    log.warn({ err, documentId }, "failed to close ws connections after finalize toggle")
-  }
-
+  // Live clients are notified instantly via the `meta.finalized` boolean in the
+  // Yjs doc (set by the client on success). New/reconnecting connections pick up
+  // the read-only state from the DB `finalized` flag in onAuthenticate.
   res.json({
     finalized: updated.finalized,
     finalizedBy: updated.finalizedBy,

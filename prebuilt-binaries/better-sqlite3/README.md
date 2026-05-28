@@ -5,7 +5,7 @@ is normally downloaded from GitHub Releases by `prebuild-install` during
 `pnpm install`. In an airtight environment that download is blocked, so the
 binary is missing and you get:
 
-```
+```text
 Error: Could not locate the bindings file for better-sqlite3
 ```
 
@@ -21,6 +21,7 @@ file to exist at the expected path.
 | `win32-arm64/`| Windows on ARM (Surface Pro X, Snapdragon, etc.) |
 
 All built for:
+
 - **better-sqlite3 `12.10.0`** (the version pinned in `apps/server`)
 - **Node 24 (ABI `137`)**
 
@@ -28,7 +29,7 @@ All built for:
 
 In your env, run:
 
-```
+```bash
 node -p "[process.platform, process.arch, process.versions.modules].join(' ')"
 ```
 
@@ -41,7 +42,7 @@ differ, or `modules` is not `137`, **stop** — these binaries won't load. (e.g.
 Copy the matching `better_sqlite3.node` into the pnpm store path for the
 package (this is the real location every workspace symlink points to):
 
-```
+```text
 node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\Release\better_sqlite3.node
 ```
 
@@ -64,7 +65,7 @@ copy /Y "prebuilt-binaries\better-sqlite3\win32-x64\better_sqlite3.node" "node_m
 
 ## Verify
 
-```
+```bash
 node -e "const D=require('better-sqlite3'); const db=new D(':memory:'); console.log('better-sqlite3 OK:', db.prepare('select 1 as ok').get())"
 ```
 
