@@ -51,24 +51,12 @@ app.use("/api/documents", documentsRouter)
 app.use("/api/comments", commentsRouter)
 
 // WebSocket route for Hocuspocus.
-// Hocuspocus v4 returns a ClientConnection and expects the integrator to wire
-// the websocket's message/close events through to it.
+// v3.4.3's handleConnection returns void and wires the websocket's
+// message/close/error handling internally via its ClientConnection.
 app.ws("/collaboration", (websocket, request) => {
   logger.info({ remoteAddress: request.socket.remoteAddress }, "ws /collaboration connection")
 
-  const clientConnection = hocuspocus.handleConnection(websocket, request as unknown as Request)
-
-  websocket.on("message", (data) => {
-    clientConnection.handleMessage(data as Buffer)
-  })
-
-  websocket.on("close", (code, reason) => {
-    clientConnection.handleClose({ code, reason: reason.toString() })
-  })
-
-  websocket.on("error", (err) => {
-    logger.error({ err }, "ws /collaboration error")
-  })
+  hocuspocus.handleConnection(websocket, request)
 })
 
 // Health check
